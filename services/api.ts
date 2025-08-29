@@ -178,8 +178,8 @@ export class API {
       console.log('OAuth authorize response status:', response.status);
       console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
       
-      // 处理302/301重定向 - 这是标准的OAuth授权链接
-      if (response.status === 302 || response.status === 301) {
+      // 处理302/301/307重定向 - 这是标准的OAuth授权链接
+      if (response.status === 302 || response.status === 301 || response.status === 307) {
         const location = response.headers.get('Location');
         console.log('Redirect location:', location);
         
