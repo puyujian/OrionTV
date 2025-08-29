@@ -176,12 +176,12 @@ const useAuthStore = create<AuthState>((set, get) => ({
         throw new Error("获取的授权链接无效：链接为空");
       }
       
-      // 验证是否是有效的OAuth2授权链接
-      if (!authorizeUrl.includes('connect.linux.do/oauth2/authorize')) {
+      // 验证是否是有效的LinuxDo授权链接
+      if (!authorizeUrl.includes('linux.do')) {
         throw new Error(`获取的授权链接无效：${authorizeUrl}`);
       }
       
-      logger.info("Using OAuth2 authorization URL:", authorizeUrl);
+      logger.info("Using authorization URL:", authorizeUrl);
       
       logger.info("Attempting to open browser with URL:", authorizeUrl);
       

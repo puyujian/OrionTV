@@ -178,43 +178,24 @@ export class API {
       console.log('OAuth authorize response status:', response.status);
       console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
       
-      // 处理重定向响应 - 检查是否直接重定向到OAuth2授权链接
+      // 处理重定向响应 - 第一次重定向的链接就是OAuth2授权地址
       if (response.status === 302 || response.status === 301 || response.status === 307) {
         const location = response.headers.get('Location');
-        console.log('Redirect location:', location);
+        console.log('First redirect location (OAuth2 authorization URL):', location);
         
-        // 如果直接重定向到OAuth2授权链接，立即返回
+        // 第一次重定向的链接就是我们需要的OAuth2授权地址，直接返回
         if (location && location.includes('connect.linux.do/oauth2/authorize')) {
-          console.log('Found OAuth2 authorization URL in redirect:', location);
+          console.log('Using OAuth2 authorization URL from first redirect:', location);
           return location;
         }
         
-        // 如果重定向到其他LinuxDo地址，跟踪重定向查找OAuth2链接
+        // 如果第一次重定向不是预期的OAuth2格式，仍然返回它（可能是授权地址的变体）
         if (location && location.includes('linux.do')) {
-          console.log('Following redirect to find OAuth2 URL:', location);
-          
-          try {
-            const redirectResponse = await fetch(location, {
-              method: "GET",
-              redirect: "manual",
-              headers: {
-                'X-Mobile-App': 'true',
-                'User-Agent': 'OrionTV/1.0 Mobile'
-              }
-            });
-            
-            const redirectLocation = redirectResponse.headers.get('Location');
-            if (redirectLocation && redirectLocation.includes('connect.linux.do/oauth2/authorize')) {
-              console.log('Found OAuth2 authorization URL after redirect:', redirectLocation);
-              return redirectLocation;
-            }
-          } catch (redirectError) {
-            console.log('Failed to follow redirect:', redirectError);
-          }
+          console.log('Using redirect URL as authorization URL:', location);
+          return location;
         }
         
-        // 如果重定向处理失败，继续检查其他方式
-        console.log('Redirect processing failed, continuing to check response body...');
+        throw new Error(`第一次重定向失败，未找到授权链接: ${location}`);
       }
       
       // 从Location头中获取OAuth2授权链接（非重定向情况）
