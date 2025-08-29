@@ -133,9 +133,13 @@ export class API {
   }
 
   async startLinuxDoOAuth(): Promise<string> {
-    const response = await this._fetch("/api/oauth/authorize", {
+    const response = await this._fetch("/api/oauth/authorize?mobile=1", {
       method: "GET",
-      redirect: "manual" // 阻止自动重定向
+      redirect: "manual", // 阻止自动重定向
+      headers: {
+        'X-Mobile-App': 'true',
+        'User-Agent': 'OrionTV-Mobile'
+      }
     });
     
     // 处理重定向响应

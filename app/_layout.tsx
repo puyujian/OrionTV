@@ -82,7 +82,10 @@ export default function RootLayout() {
     const handleDeepLink = (event: { url: string }) => {
       const url = event.url;
       // Check if this is an OAuth callback URL
-      if (url.includes('/oauth/callback') || url.includes('code=') || url.includes('state=')) {
+      if (url.includes('/oauth/callback') || 
+          url.includes('code=') || 
+          url.includes('state=') ||
+          url.startsWith('oriontv://oauth/callback')) {
         handleOAuthCallback(url);
       }
     };
@@ -92,7 +95,10 @@ export default function RootLayout() {
 
     // Handle app launch with URL (when app was closed)
     Linking.getInitialURL().then((url) => {
-      if (url && (url.includes('/oauth/callback') || url.includes('code=') || url.includes('state='))) {
+      if (url && (url.includes('/oauth/callback') || 
+                  url.includes('code=') || 
+                  url.includes('state=') ||
+                  url.startsWith('oriontv://oauth/callback'))) {
         handleOAuthCallback(url);
       }
     });

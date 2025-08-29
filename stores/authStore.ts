@@ -165,6 +165,33 @@ const useAuthStore = create<AuthState>((set, get) => ({
   handleOAuthCallback: async (url: string): Promise<boolean> => {
     try {
       const urlObj = new URL(url);
+      
+      // 处理深度链接格式 oriontv://oauth/callback?success=true 或 error=xxx
+      if (url.startsWith('oriontv://oauth/callback')) {
+        const success = urlObj.searchParams.get('success');
+        const error = urlObj.searchParams.get('error');
+        
+        if (success === 'true') {
+          // OAuth成功，重新检查登录状态
+          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+          await get().checkLoginStatus(apiBaseUrl);
+          
+          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+          set({ 
+            isOAuthInProgress: false, 
+            isLoginModalVisible: false 
+          });
+          return true;
+        }
+        
+        if (error) {
+          Toast.show({ type: "error", text1: "授权失败", text2: decodeURIComponent(error) });
+          set({ isOAuthInProgress: false });
+          return false;
+        }
+      }
+      
+      // 处理传统web回调格式
       const code = urlObj.searchParams.get('code');
       const state = urlObj.searchParams.get('state');
       const error = urlObj.searchParams.get('error');
