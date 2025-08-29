@@ -171,45 +171,58 @@ const useAuthStore = create<AuthState>((set, get) => ({
       const authorizeUrl = await api.startLinuxDoOAuth();
       logger.info("Got authorize URL from API:", authorizeUrl);
       
-      // 基本验证：确保授权链接不为空
+      // 验证授权链接格式
       if (!authorizeUrl || typeof authorizeUrl !== 'string') {
         throw new Error("获取的授权链接无效：链接为空");
       }
       
+      // 验证URL格式
+      try {
+        new URL(authorizeUrl); // 验证URL格式
+      } catch (urlError) {
+        throw new Error("获取的授权链接格式不正确");
+      }
+      
       logger.info("Attempting to open browser with URL:", authorizeUrl);
       
-      // 尝试打开浏览器
+      // 直接使用Linking打开系统浏览器进行授权
       try {
-        const supported = await Linking.canOpenURL(authorizeUrl);
-        logger.info("URL supported by Linking:", supported);
+        const canOpen = await Linking.canOpenURL(authorizeUrl);
+        logger.info("URL can be opened by Linking:", canOpen);
         
-        if (supported) {
+        if (canOpen) {
           await Linking.openURL(authorizeUrl);
-          logger.info("Browser opened successfully");
+          logger.info("System browser opened successfully for OAuth");
           
           Toast.show({ 
             type: "info", 
-            text1: "请在浏览器中完成授权", 
-            text2: "完成后返回应用"
+            text1: "授权页面已在浏览器中打开", 
+            text2: "完成授权后会自动返回应用"
           });
+          
+          // 清理OAuth状态，等待回调
+          set({ oAuthUrl: undefined });
         } else {
+          // 如果无法直接打开，提供手动复制选项
           logger.warn("Cannot open URL directly, providing manual copy option");
           set({ oAuthUrl: authorizeUrl });
           
           Toast.show({ 
             type: "info", 
-            text1: "请手动打开浏览器", 
-            text2: "点击下方\"复制授权链接\"按钮"
+            text1: "请手动复制授权链接", 
+            text2: "点击下方\"复制授权链接\"按钮在浏览器中打开"
           });
         }
       } catch (linkingError) {
-        logger.error("Failed to open browser:", linkingError);
+        logger.error("Failed to open system browser:", linkingError);
+        
+        // 作为备选方案，保存URL供用户手动复制
         set({ oAuthUrl: authorizeUrl });
         
         Toast.show({ 
           type: "warning", 
           text1: "无法自动打开浏览器", 
-          text2: "请点击\"复制授权链接\"手动打开"
+          text2: "请手动复制下方链接在浏览器中打开"
         });
       }
       
@@ -223,11 +236,11 @@ const useAuthStore = create<AuthState>((set, get) => ({
       
       Toast.show({ 
         type: "error", 
-        text1: "启动授权失败", 
+        text1: "启动LinuxDo授权失败", 
         text2: errorMessage
       });
       
-      set({ isOAuthInProgress: false });
+      set({ isOAuthInProgress: false, oAuthUrl: undefined });
     }
   },
   
