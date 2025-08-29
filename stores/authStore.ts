@@ -127,16 +127,38 @@ const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const result = await api.register(username, password, confirmPassword);
       if (result.ok) {
-        Toast.show({ type: "success", text1: "注册成功", text2: "请使用新账号登录" });
+        // 根据是否需要审核显示不同消息
+        if (result.needsApproval) {
+          Toast.show({ 
+            type: "success", 
+            text1: "注册申请已提交", 
+            text2: result.message || "请等待管理员审核" 
+          });
+        } else {
+          Toast.show({ 
+            type: "success", 
+            text1: "注册成功", 
+            text2: result.message || "请使用新账号登录" 
+          });
+        }
         set({ isRegisterModalVisible: false, isLoginModalVisible: true });
         return true;
       } else {
-        Toast.show({ type: "error", text1: "注册失败", text2: result.error || "请检查输入信息" });
+        // 显示服务器返回的具体错误信息
+        Toast.show({ 
+          type: "error", 
+          text1: "注册失败", 
+          text2: result.error || result.message || "请检查输入信息" 
+        });
         return false;
       }
     } catch (error) {
       logger.error("Registration failed:", error);
-      Toast.show({ type: "error", text1: "注册失败", text2: "网络错误或服务器异常" });
+      Toast.show({ 
+        type: "error", 
+        text1: "注册失败", 
+        text2: error instanceof Error ? error.message : "网络错误或服务器异常" 
+      });
       return false;
     }
   },

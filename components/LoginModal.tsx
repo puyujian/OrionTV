@@ -97,27 +97,38 @@ const LoginModal = () => {
     }
     setIsLoading(true);
     try {
-      await api.login(isLocalStorage ? undefined : username, password);
-      await checkLoginStatus(apiBaseUrl);
-      await refreshPlayRecords();
+      const result = await api.login(isLocalStorage ? undefined : username, password);
       
-      // Save credentials on successful login
-      await LoginCredentialsManager.save({ username, password });
-      
-      Toast.show({ type: "success", text1: "登录成功" });
-      hideLoginModal();
+      // 检查登录是否成功
+      if (result.ok) {
+        await checkLoginStatus(apiBaseUrl);
+        await refreshPlayRecords();
+        
+        // Save credentials on successful login
+        await LoginCredentialsManager.save({ username, password });
+        
+        Toast.show({ type: "success", text1: "登录成功" });
+        hideLoginModal();
 
-      // Show disclaimer alert after successful login
-      Alert.alert(
-        "免责声明",
-        "本应用仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。",
-        [{ text: "确定" }]
-      );
+        // Show disclaimer alert after successful login
+        Alert.alert(
+          "免责声明",
+          "本应用仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。",
+          [{ text: "确定" }]
+        );
+      } else {
+        // 显示服务器返回的错误信息
+        Toast.show({
+          type: "error",
+          text1: "登录失败",
+          text2: result.error || "用户名或密码错误",
+        });
+      }
     } catch (error) {
       Toast.show({
         type: "error",
         text1: "登录失败",
-        text2: error instanceof Error ? error.message : "用户名或密码错误",
+        text2: error instanceof Error ? error.message : "网络错误或服务器异常",
       });
     } finally {
       setIsLoading(false);

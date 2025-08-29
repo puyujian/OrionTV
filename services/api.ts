@@ -123,13 +123,43 @@ export class API {
     return response.json();
   }
 
-  async login(username?: string | undefined, password?: string): Promise<{ ok: boolean }> {
-    const response = await this._fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    return response.json();
+  async login(username?: string | undefined, password?: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const response = await this._fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      return response.json();
+    } catch (error) {
+      // 如果是401错误，尝试获取错误详情
+      if (error instanceof Error && error.message === "UNAUTHORIZED") {
+        try {
+          const response = await fetch(`${this.baseURL}/api/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+          });
+          
+          if (response.status === 401) {
+            const errorData = await response.json().catch(() => ({}));
+            return {
+              ok: false,
+              error: errorData.error || "用户名或密码错误"
+            };
+          }
+        } catch (fetchError) {
+          // 忽略二次请求错误
+        }
+        
+        return {
+          ok: false,
+          error: "用户名或密码错误"
+        };
+      }
+      
+      throw error; // 重新抛出其他错误
+    }
   }
 
   async startLinuxDoOAuth(): Promise<string> {
@@ -326,26 +356,53 @@ export class API {
     return response.json();
   }
 
-  async register(username: string, password: string, confirmPassword?: string): Promise<{ ok: boolean; error?: string }> {
-    const response = await this._fetch("/api/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, confirmPassword: confirmPassword || password }),
-    });
-    
-    const data = await response.json();
-    
-    // 处理LunaTV后端的响应格式: { success: boolean, message: string }
-    // 转换为前端期望的格式: { ok: boolean, error?: string }
-    if (data.success !== undefined) {
-      return {
-        ok: data.success,
-        error: data.success ? undefined : data.message
-      };
+  async register(username: string, password: string, confirmPassword?: string): Promise<{ ok: boolean; error?: string; message?: string; needsApproval?: boolean }> {
+    try {
+      const response = await this._fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, confirmPassword: confirmPassword || password }),
+      });
+      
+      const data = await response.json();
+      
+      // 处理LunaTV后端的响应格式: { success: boolean, message: string, needsApproval?: boolean }
+      // 转换为前端期望的格式: { ok: boolean, error?: string, message?: string, needsApproval?: boolean }
+      if (data.success !== undefined) {
+        return {
+          ok: data.success,
+          error: data.success ? undefined : data.message,
+          message: data.message,
+          needsApproval: data.needsApproval
+        };
+      }
+      
+      // 保持兼容旧格式
+      return data;
+    } catch (error) {
+      // 处理HTTP错误，尝试获取错误详情
+      if (error instanceof Error && error.message.includes("HTTP error!")) {
+        try {
+          const response = await fetch(`${this.baseURL}/api/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password, confirmPassword: confirmPassword || password }),
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            return {
+              ok: false,
+              error: errorData.message || errorData.error || "注册失败"
+            };
+          }
+        } catch (fetchError) {
+          // 忽略二次请求错误
+        }
+      }
+      
+      throw error; // 重新抛出其他错误
     }
-    
-    // 保持兼容旧格式
-    return data;
   }
 
   async logout(): Promise<{ ok: boolean }> {
