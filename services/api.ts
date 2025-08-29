@@ -178,7 +178,20 @@ export class API {
       console.log('OAuth authorize response status:', response.status);
       console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
       
-      // 从Location头中获取OAuth2授权链接
+      // 处理重定向响应
+      if (response.status === 302 || response.status === 301 || response.status === 307) {
+        const location = response.headers.get('Location');
+        console.log('Redirect location:', location);
+        
+        if (location && location.includes('connect.linux.do/oauth2/authorize')) {
+          console.log('Found OAuth2 authorization URL in redirect:', location);
+          return location;
+        }
+        
+        throw new Error(`重定向失败，未找到OAuth2授权链接: ${location}`);
+      }
+      
+      // 从Location头中获取OAuth2授权链接（非重定向情况）
       const location = response.headers.get('Location');
       if (location && location.includes('connect.linux.do/oauth2/authorize')) {
         console.log('Found OAuth2 authorization URL:', location);
