@@ -178,17 +178,43 @@ export class API {
       console.log('OAuth authorize response status:', response.status);
       console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
       
-      // 处理重定向响应
+      // 处理重定向响应 - 检查是否直接重定向到OAuth2授权链接
       if (response.status === 302 || response.status === 301 || response.status === 307) {
         const location = response.headers.get('Location');
         console.log('Redirect location:', location);
         
+        // 如果直接重定向到OAuth2授权链接，立即返回
         if (location && location.includes('connect.linux.do/oauth2/authorize')) {
           console.log('Found OAuth2 authorization URL in redirect:', location);
           return location;
         }
         
-        throw new Error(`重定向失败，未找到OAuth2授权链接: ${location}`);
+        // 如果重定向到其他LinuxDo地址，跟踪重定向查找OAuth2链接
+        if (location && location.includes('linux.do')) {
+          console.log('Following redirect to find OAuth2 URL:', location);
+          
+          try {
+            const redirectResponse = await fetch(location, {
+              method: "GET",
+              redirect: "manual",
+              headers: {
+                'X-Mobile-App': 'true',
+                'User-Agent': 'OrionTV/1.0 Mobile'
+              }
+            });
+            
+            const redirectLocation = redirectResponse.headers.get('Location');
+            if (redirectLocation && redirectLocation.includes('connect.linux.do/oauth2/authorize')) {
+              console.log('Found OAuth2 authorization URL after redirect:', redirectLocation);
+              return redirectLocation;
+            }
+          } catch (redirectError) {
+            console.log('Failed to follow redirect:', redirectError);
+          }
+        }
+        
+        // 如果重定向处理失败，继续检查其他方式
+        console.log('Redirect processing failed, continuing to check response body...');
       }
       
       // 从Location头中获取OAuth2授权链接（非重定向情况）
