@@ -182,32 +182,12 @@ export class API {
       if (response.status === 302 || response.status === 301 || response.status === 307) {
         const location = response.headers.get('Location');
         console.log('Redirect location:', location);
-        console.log('Redirect status code:', response.status);
         
-        // 检查是否是有效的LinuxDo OAuth授权链接
-        if (location && location.includes('connect.linux.do/oauth2/authorize')) {
-          console.log('Found valid OAuth2 authorization URL:', location);
-          return location;
-        }
-        
-        // 如果是connect.linux.do域名的任何链接，都认为是有效的
-        if (location && location.includes('connect.linux.do')) {
-          console.log('Found connect.linux.do URL:', location);
-          return location;
-        }
-        
-        // 检查其他LinuxDo相关链接
+        // 检查是否是LinuxDo相关链接
         if (location && location.includes('linux.do')) {
-          console.log('Found LinuxDo URL (not OAuth2):', location);
+          console.log('Found LinuxDo authorization URL:', location);
           return location;
         }
-        
-        // 详细记录无效重定向的情况
-        console.log('Invalid redirect detected:');
-        console.log('- Status:', response.status);
-        console.log('- Location:', location);
-        console.log('- Location type:', typeof location);
-        console.log('- Location length:', location?.length || 0);
         
         throw new Error(`授权重定向失败，无效的重定向地址: ${location}`);
       }
