@@ -127,11 +127,16 @@ export default function RootLayout() {
             <Stack.Screen name="+not-found" />
           </Stack>
         </View>
-        <Toast />
         <LoginModal />
         <RegisterModal />
         <UpdateModal />
       </ThemeProvider>
+      <Toast 
+        position="top"
+        topOffset={60}
+        visibilityTime={3000}
+        autoHide={true}
+      />
     </SafeAreaProvider>
   );
 }
