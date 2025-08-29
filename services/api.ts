@@ -164,8 +164,6 @@ export class API {
 
   async startLinuxDoOAuth(): Promise<string> {
     try {
-      console.log('Starting LinuxDo OAuth request to:', `${this.baseURL}/api/oauth/authorize`);
-      
       const response = await fetch(`${this.baseURL}/api/oauth/authorize`, {
         method: "GET",
         redirect: "manual",
@@ -175,51 +173,28 @@ export class API {
         }
       });
       
-      console.log('OAuth authorize response status:', response.status);
-      console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
-      
-      // 不管状态码，直接取Location头作为授权地址
       const location = response.headers.get('Location');
-      console.log('Authorization URL from Location header:', location);
-      
       if (location) {
-        console.log('Using Location header as authorization URL:', location);
         return location;
-      } else {
-        throw new Error('响应中没有Location头');
       }
+      
+      throw new Error('未找到授权链接');
       
     } catch (error) {
-      console.error('LinuxDo OAuth error:', error);
-      
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        throw new Error('网络连接失败，请检查服务器地址和网络设置');
-      }
-      
       if (error instanceof Error) {
         throw error;
       }
-      
-      throw new Error('OAuth启动失败: 未知错误');
+      throw new Error('OAuth启动失败');
     }
   }
 
   async handleOAuthCallback(code: string, state: string): Promise<{ ok: boolean; error?: string }> {
     try {
-      const response = await fetch(`${this.baseURL}/api/oauth/callback`, {
-        method: "GET",
-        headers: {
-          'X-Mobile-App': 'true',
-          'User-Agent': 'OrionTV/1.0 Mobile'
-        },
-        redirect: "manual"
-      });
-      
       const url = new URL(`${this.baseURL}/api/oauth/callback`);
       url.searchParams.set('code', code);
       url.searchParams.set('state', state);
       
-      const callbackResponse = await fetch(url.toString(), {
+      const response = await fetch(url.toString(), {
         method: "GET",
         headers: {
           'X-Mobile-App': 'true',
@@ -228,8 +203,8 @@ export class API {
         redirect: "manual"
       });
       
-      if (callbackResponse.status === 302 || callbackResponse.status === 301) {
-        const location = callbackResponse.headers.get('Location');
+      if (response.status === 302 || response.status === 301) {
+        const location = response.headers.get('Location');
         if (location?.includes('oriontv://oauth/callback?success=true')) {
           return { ok: true };
         }
@@ -241,8 +216,8 @@ export class API {
         return { ok: true }; // 其他重定向也认为是成功
       }
       
-      if (!callbackResponse.ok) {
-        const errorText = await callbackResponse.text();
+      if (!response.ok) {
+        const errorText = await response.text();
         return { ok: false, error: `回调处理失败: ${errorText}` };
       }
       
