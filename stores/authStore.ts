@@ -171,43 +171,88 @@ const useAuthStore = create<AuthState>((set, get) => ({
       const authorizeUrl = await api.startLinuxDoOAuth();
       logger.info("Got authorize URL:", authorizeUrl);
       
-      if (!authorizeUrl || !authorizeUrl.includes('connect.linux.do')) {
-        throw new Error("获取的授权链接无效");
+      // 验证授权链接的有效性
+      if (!authorizeUrl || typeof authorizeUrl !== 'string') {
+        throw new Error("获取的授权链接无效：链接为空");
+      }
+      
+      // 检查是否是有效的LinuxDo授权链接
+      const isValidLinuxDoUrl = authorizeUrl.includes('linux.do') && 
+                               (authorizeUrl.includes('oauth2/authorize') || 
+                                authorizeUrl.includes('sso_provider') || 
+                                authorizeUrl.includes('session'));
+      
+      if (!isValidLinuxDoUrl) {
+        throw new Error(`获取的授权链接无效：${authorizeUrl}`);
       }
       
       logger.info("Attempting to open browser with URL:", authorizeUrl);
-      const supported = await Linking.canOpenURL(authorizeUrl);
       
-      if (supported) {
-        await Linking.openURL(authorizeUrl);
-        logger.info("Successfully opened browser");
-        Toast.show({ 
-          type: "info", 
-          text1: "请在浏览器中完成授权", 
-          text2: "完成后返回应用" 
-        });
-      } else {
-        logger.error("Cannot open URL, saving for manual copy");
+      // 尝试打开浏览器
+      try {
+        // 检查URL是否支持
+        const supported = await Linking.canOpenURL(authorizeUrl);
+        logger.info("URL supported by Linking:", supported);
+        
+        if (supported) {
+          const opened = await Linking.openURL(authorizeUrl);
+          logger.info("Browser opening result:", opened);
+          
+          Toast.show({ 
+            type: "info", 
+            text1: "请在浏览器中完成授权", 
+            text2: "完成后返回应用"
+          });
+        } else {
+          // 如果不支持直接打开，提供手动复制选项
+          logger.warn("Cannot open URL directly, providing manual copy option");
+          set({ oAuthUrl: authorizeUrl });
+          
+          Toast.show({ 
+            type: "info", 
+            text1: "请手动打开浏览器", 
+            text2: "点击下方\"复制授权链接\"按钮"
+          });
+        }
+      } catch (linkingError) {
+        logger.error("Failed to open browser:", linkingError);
+        
+        // 浏览器打开失败，提供手动复制选项
         set({ oAuthUrl: authorizeUrl });
+        
         Toast.show({ 
-          type: "info", 
-          text1: "请手动打开浏览器", 
-          text2: "点击下方\"复制授权链接\"按钮" 
+          type: "warning", 
+          text1: "无法自动打开浏览器", 
+          text2: "请点击\"复制授权链接\"手动打开"
         });
       }
+      
     } catch (error) {
       logger.error("Failed to start LinuxDo OAuth:", error);
+      
       let errorMessage = "请检查网络连接和服务器地址";
       
       if (error instanceof Error) {
-        errorMessage = error.message;
+        // 提供更具体的错误信息
+        if (error.message.includes('网络连接失败')) {
+          errorMessage = "网络连接失败，请检查网络设置";
+        } else if (error.message.includes('LinuxDo OAuth 功能未启用')) {
+          errorMessage = "服务器未启用 LinuxDo OAuth 功能";
+        } else if (error.message.includes('OAuth 配置不完整')) {
+          errorMessage = "服务器 OAuth 配置不完整，请联系管理员";
+        } else if (error.message.includes('授权链接无效')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message;
+        }
       }
       
       Toast.show({ 
         type: "error", 
         text1: "启动授权失败", 
-        text2: errorMessage 
+        text2: errorMessage
       });
+      
       set({ isOAuthInProgress: false });
     }
   },

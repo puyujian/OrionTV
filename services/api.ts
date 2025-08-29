@@ -164,6 +164,8 @@ export class API {
 
   async startLinuxDoOAuth(): Promise<string> {
     try {
+      console.log('Starting LinuxDo OAuth request to:', `${this.baseURL}/api/oauth/authorize`);
+      
       const response = await fetch(`${this.baseURL}/api/oauth/authorize`, {
         method: "GET",
         redirect: "manual",
@@ -173,12 +175,82 @@ export class API {
         }
       });
       
+      console.log('OAuth authorize response status:', response.status);
+      console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // 处理302/301重定向 - 这是标准的OAuth授权链接
       if (response.status === 302 || response.status === 301) {
         const location = response.headers.get('Location');
-        if (location && location.includes('connect.linux.do')) {
+        console.log('Redirect location:', location);
+        
+        // 检查是否是有效的LinuxDo OAuth授权链接
+        if (location && location.includes('connect.linux.do/oauth2/authorize')) {
+          console.log('Found valid OAuth2 authorization URL:', location);
           return location;
         }
-        throw new Error(`授权重定向失败: ${location}`);
+        
+        // 检查其他LinuxDo相关链接
+        if (location && location.includes('linux.do')) {
+          console.log('Found LinuxDo URL (not OAuth2):', location);
+          return location;
+        }
+        
+        throw new Error(`授权重定向失败，无效的重定向地址: ${location}`);
+      }
+      
+      // 处理200响应 - 可能包含JSON格式的授权链接
+      if (response.status === 200) {
+        console.log('Received 200 response, checking content...');
+        
+        const contentType = response.headers.get('Content-Type') || '';
+        
+        // 尝试解析JSON响应
+        if (contentType.includes('application/json')) {
+          try {
+            const data = await response.json();
+            console.log('JSON response data:', data);
+            
+            if (data.authorizeUrl && data.authorizeUrl.includes('connect.linux.do')) {
+              console.log('Found authorize URL in JSON:', data.authorizeUrl);
+              return data.authorizeUrl;
+            }
+            
+            if (data.url && data.url.includes('connect.linux.do')) {
+              console.log('Found URL in JSON:', data.url);
+              return data.url;
+            }
+          } catch (jsonError) {
+            console.log('Failed to parse JSON response:', jsonError);
+          }
+        }
+        
+        // 尝试解析HTML响应中的授权链接
+        try {
+          const htmlText = await response.text();
+          console.log('HTML response length:', htmlText.length);
+          
+          // 查找包含LinuxDo OAuth授权链接的href属性
+          const oauthLinkMatch = htmlText.match(/href="([^"]*connect\.linux\.do\/oauth2\/authorize[^"]*)"/);
+          if (oauthLinkMatch && oauthLinkMatch[1]) {
+            const authUrl = oauthLinkMatch[1].replace(/&amp;/g, '&');
+            console.log('Found OAuth2 URL in HTML:', authUrl);
+            return authUrl;
+          }
+          
+          // 查找任何LinuxDo相关链接
+          const linuxDoLinkMatch = htmlText.match(/href="([^"]*linux\.do[^"]*)"/);
+          if (linuxDoLinkMatch && linuxDoLinkMatch[1]) {
+            const authUrl = linuxDoLinkMatch[1].replace(/&amp;/g, '&');
+            console.log('Found LinuxDo URL in HTML:', authUrl);
+            return authUrl;
+          }
+          
+          console.log('No valid authorization links found in HTML response');
+        } catch (textError) {
+          console.log('Failed to parse HTML response:', textError);
+        }
+        
+        throw new Error('服务器返回200但未找到有效的授权链接');
       }
       
       if (response.status === 403) {
@@ -192,6 +264,8 @@ export class API {
       throw new Error(`获取授权链接失败，状态码: ${response.status}`);
       
     } catch (error) {
+      console.error('LinuxDo OAuth error:', error);
+      
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         throw new Error('网络连接失败，请检查服务器地址和网络设置');
       }
