@@ -141,11 +141,15 @@ const useAuthStore = create<AuthState>((set, get) => ({
   startLinuxDoOAuth: async () => {
     try {
       set({ isOAuthInProgress: true });
+      logger.info("Starting LinuxDo OAuth process...");
+      
       const authorizeUrl = await api.startLinuxDoOAuth();
+      logger.info("Got authorize URL:", authorizeUrl);
       
       // 使用系统浏览器打开授权页面
       const supported = await Linking.canOpenURL(authorizeUrl);
       if (supported) {
+        logger.info("Opening browser with URL:", authorizeUrl);
         await Linking.openURL(authorizeUrl);
         Toast.show({ 
           type: "info", 
@@ -157,7 +161,12 @@ const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch (error) {
       logger.error("Failed to start LinuxDo OAuth:", error);
-      Toast.show({ type: "error", text1: "启动授权失败", text2: "请检查网络连接" });
+      const errorMessage = error instanceof Error ? error.message : "请检查网络连接";
+      Toast.show({ 
+        type: "error", 
+        text1: "启动授权失败", 
+        text2: errorMessage 
+      });
       set({ isOAuthInProgress: false });
     }
   },

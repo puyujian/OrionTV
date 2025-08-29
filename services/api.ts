@@ -133,39 +133,51 @@ export class API {
   }
 
   async startLinuxDoOAuth(): Promise<string> {
-    const response = await this._fetch("/api/oauth/authorize?mobile=1", {
-      method: "GET",
-      redirect: "manual", // 阻止自动重定向
-      headers: {
-        'X-Mobile-App': 'true',
-        'User-Agent': 'OrionTV-Mobile'
-      }
-    });
-    
-    // 处理重定向响应
-    if (response.status === 302 || response.type === 'opaqueredirect') {
-      const location = response.headers.get('location');
-      if (location) {
-        return location;
-      }
-    }
-    
-    // 处理重定向后的URL
-    if (response.redirected && response.url) {
-      return response.url;
-    }
-    
-    // 尝试从JSON响应获取授权URL
     try {
-      const data = await response.json();
-      if (data.authorizeUrl) {
-        return data.authorizeUrl;
+      // 第一步：获取授权URL，跟随重定向
+      const response = await this._fetch("/api/oauth/authorize?mobile=1", {
+        method: "GET",
+        redirect: "follow", // 允许自动重定向
+        headers: {
+          'X-Mobile-App': 'true',
+          'User-Agent': 'OrionTV-Mobile'
+        }
+      });
+      
+      // 检查最终响应的URL
+      if (response.url && response.url.includes('connect.linux.do')) {
+        return response.url;
       }
-    } catch (e) {
-      // 忽略JSON解析错误
+      
+      // 尝试从响应体解析授权URL
+      if (response.ok) {
+        try {
+          const data = await response.json();
+          if (data.authorizeUrl) {
+            return data.authorizeUrl;
+          }
+        } catch (e) {
+          // 如果不是JSON，尝试从HTML中解析
+          try {
+            const html = await response.text();
+            // 查找可能的授权链接
+            const linkMatch = html.match(/href="([^"]*connect\.linux\.do[^"]*)"/i);
+            if (linkMatch && linkMatch[1]) {
+              return linkMatch[1];
+            }
+          } catch (htmlError) {
+            // 忽略HTML解析错误
+          }
+        }
+      }
+      
+      throw new Error(`未能获取授权链接，响应状态：${response.status}`);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`OAuth启动失败: ${error.message}`);
+      }
+      throw new Error("OAuth启动失败: 网络错误");
     }
-    
-    throw new Error("未能获取授权链接");
   }
 
   async handleOAuthCallback(code: string, state: string): Promise<{ ok: boolean; error?: string }> {
