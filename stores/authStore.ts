@@ -169,26 +169,23 @@ const useAuthStore = create<AuthState>((set, get) => ({
       logger.info("Starting LinuxDo OAuth process...");
       
       const authorizeUrl = await api.startLinuxDoOAuth();
-      logger.info("Got authorize URL:", authorizeUrl);
+      logger.info("Got authorize URL from API:", authorizeUrl);
       
       // 基本验证：确保授权链接不为空
       if (!authorizeUrl || typeof authorizeUrl !== 'string') {
         throw new Error("获取的授权链接无效：链接为空");
       }
       
-      logger.info("Got authorization URL from server:", authorizeUrl);
-      
       logger.info("Attempting to open browser with URL:", authorizeUrl);
       
       // 尝试打开浏览器
       try {
-        // 检查URL是否支持
         const supported = await Linking.canOpenURL(authorizeUrl);
         logger.info("URL supported by Linking:", supported);
         
         if (supported) {
-          const opened = await Linking.openURL(authorizeUrl);
-          logger.info("Browser opening result:", opened);
+          await Linking.openURL(authorizeUrl);
+          logger.info("Browser opened successfully");
           
           Toast.show({ 
             type: "info", 
@@ -196,7 +193,6 @@ const useAuthStore = create<AuthState>((set, get) => ({
             text2: "完成后返回应用"
           });
         } else {
-          // 如果不支持直接打开，提供手动复制选项
           logger.warn("Cannot open URL directly, providing manual copy option");
           set({ oAuthUrl: authorizeUrl });
           
@@ -208,8 +204,6 @@ const useAuthStore = create<AuthState>((set, get) => ({
         }
       } catch (linkingError) {
         logger.error("Failed to open browser:", linkingError);
-        
-        // 浏览器打开失败，提供手动复制选项
         set({ oAuthUrl: authorizeUrl });
         
         Toast.show({ 
@@ -222,21 +216,9 @@ const useAuthStore = create<AuthState>((set, get) => ({
     } catch (error) {
       logger.error("Failed to start LinuxDo OAuth:", error);
       
-      let errorMessage = "请检查网络连接和服务器地址";
-      
+      let errorMessage = "OAuth启动失败";
       if (error instanceof Error) {
-        // 提供更具体的错误信息
-        if (error.message.includes('网络连接失败')) {
-          errorMessage = "网络连接失败，请检查网络设置";
-        } else if (error.message.includes('LinuxDo OAuth 功能未启用')) {
-          errorMessage = "服务器未启用 LinuxDo OAuth 功能";
-        } else if (error.message.includes('OAuth 配置不完整')) {
-          errorMessage = "服务器 OAuth 配置不完整，请联系管理员";
-        } else if (error.message.includes('授权链接无效')) {
-          errorMessage = error.message;
-        } else {
-          errorMessage = error.message;
-        }
+        errorMessage = error.message;
       }
       
       Toast.show({ 

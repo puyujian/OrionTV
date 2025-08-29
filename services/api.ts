@@ -164,23 +164,39 @@ export class API {
 
   async startLinuxDoOAuth(): Promise<string> {
     try {
+      console.log('Starting LinuxDo OAuth request to:', `${this.baseURL}/api/oauth/authorize`);
+      
       const response = await fetch(`${this.baseURL}/api/oauth/authorize`, {
         method: "GET",
-        redirect: "manual",
+        redirect: "manual", // 阻止自动跟踪重定向
         headers: {
           'X-Mobile-App': 'true',
           'User-Agent': 'OrionTV/1.0 Mobile'
         }
       });
       
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // 获取Location头 - 不管状态码是什么
       const location = response.headers.get('Location');
+      console.log('Location header:', location);
+      
       if (location) {
+        console.log('Found authorization URL:', location);
         return location;
       }
       
-      throw new Error('未找到授权链接');
+      // 如果没有Location头，打印调试信息
+      console.error('No Location header found in response');
+      console.error('Response status:', response.status);
+      console.error('All headers:', Object.fromEntries(response.headers.entries()));
+      
+      throw new Error(`未找到授权链接 - 状态码: ${response.status}`);
       
     } catch (error) {
+      console.error('LinuxDo OAuth error:', error);
+      
       if (error instanceof Error) {
         throw error;
       }
