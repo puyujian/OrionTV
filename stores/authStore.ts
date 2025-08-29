@@ -223,7 +223,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
         Toast.show({ 
           type: "info", 
           text1: "请手动打开浏览器", 
-          text2: "点击下方"复制授权链接"按钮" 
+          text2: "点击下方\"复制授权链接\"按钮" 
         });
         
         // 不要设置 isOAuthInProgress 为 false，因为用户可能会手动打开
