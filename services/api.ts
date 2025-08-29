@@ -178,52 +178,16 @@ export class API {
       console.log('OAuth authorize response status:', response.status);
       console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
       
-      // 直接获取第一次重定向的目标链接作为授权地址
-      if (response.status === 302 || response.status === 301 || response.status === 307) {
-        const location = response.headers.get('Location');
-        console.log('First redirect location (this is our authorization URL):', location);
-        
-        if (location) {
-          console.log('Returning first redirect URL as authorization URL:', location);
-          return location; // 直接返回第一次重定向的目标，不做任何验证和处理
-        }
-        
-        throw new Error(`第一次重定向失败，Location头为空`);
-      }
+      // 不管状态码，直接取Location头作为授权地址
+      const location = response.headers.get('Location');
+      console.log('Authorization URL from Location header:', location);
       
-      // 如果不是重定向，尝试从响应体获取授权链接
-      try {
-        const contentType = response.headers.get('Content-Type') || '';
-        
-        if (contentType.includes('application/json')) {
-          const data = await response.json();
-          console.log('JSON response data:', data);
-          
-          if (data.authorizeUrl && data.authorizeUrl.includes('connect.linux.do/oauth2/authorize')) {
-            console.log('Found OAuth2 authorize URL in JSON:', data.authorizeUrl);
-            return data.authorizeUrl;
-          }
-          
-          if (data.url && data.url.includes('connect.linux.do/oauth2/authorize')) {
-            console.log('Found OAuth2 URL in JSON:', data.url);
-            return data.url;
-          }
-        } else {
-          const htmlText = await response.text();
-          console.log('HTML response length:', htmlText.length);
-          
-          const oauth2LinkMatch = htmlText.match(/href="([^"]*connect\.linux\.do\/oauth2\/authorize[^"]*)"/);
-          if (oauth2LinkMatch && oauth2LinkMatch[1]) {
-            const authUrl = oauth2LinkMatch[1].replace(/&amp;/g, '&');
-            console.log('Found OAuth2 authorization URL in HTML:', authUrl);
-            return authUrl;
-          }
-        }
-      } catch (parseError) {
-        console.log('Failed to parse response body:', parseError);
+      if (location) {
+        console.log('Using Location header as authorization URL:', location);
+        return location;
+      } else {
+        throw new Error('响应中没有Location头');
       }
-      
-      throw new Error('未找到有效的OAuth2授权链接');
       
     } catch (error) {
       console.error('LinuxDo OAuth error:', error);
