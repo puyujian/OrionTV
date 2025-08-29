@@ -283,7 +283,20 @@ export class API {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password, confirmPassword: confirmPassword || password }),
     });
-    return response.json();
+    
+    const data = await response.json();
+    
+    // 处理LunaTV后端的响应格式: { success: boolean, message: string }
+    // 转换为前端期望的格式: { ok: boolean, error?: string }
+    if (data.success !== undefined) {
+      return {
+        ok: data.success,
+        error: data.success ? undefined : data.message
+      };
+    }
+    
+    // 保持兼容旧格式
+    return data;
   }
 
   async logout(): Promise<{ ok: boolean }> {

@@ -144,7 +144,7 @@ const RegisterModal = () => {
             text="返回登录"
             onPress={handleBackToLogin}
             disabled={isLoading}
-            style={[styles.button, styles.backButton]}
+            style={styles.button}
           />
         </ThemedView>
       </View>
@@ -193,10 +193,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 50,
     marginBottom: 12,
-  },
-  backButton: {
-    backgroundColor: "#666",
-    marginBottom: 0,
   },
 });
 

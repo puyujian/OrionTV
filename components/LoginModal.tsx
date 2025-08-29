@@ -166,7 +166,7 @@ const LoginModal = () => {
               text={isOAuthInProgress ? "授权中..." : "使用 LinuxDo 登录"}
               onPress={handleLinuxDoLogin}
               disabled={isOAuthInProgress || isLoading}
-              style={[styles.button, styles.oauthButton]}
+              style={styles.button}
             >
               {isOAuthInProgress && <ActivityIndicator color="#fff" />}
             </StyledButton>
@@ -178,7 +178,7 @@ const LoginModal = () => {
               text="注册新账号"
               onPress={handleRegisterClick}
               disabled={isLoading || isOAuthInProgress}
-              style={[styles.button, styles.registerButton]}
+              style={styles.button}
             />
           )}
         </ThemedView>
@@ -228,13 +228,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 50,
     marginBottom: 12,
-  },
-  oauthButton: {
-    backgroundColor: "#4a90e2",
-  },
-  registerButton: {
-    backgroundColor: "#666",
-    marginBottom: 0,
   },
 });
 
