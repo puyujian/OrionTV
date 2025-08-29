@@ -68,9 +68,23 @@ export interface ApiSite {
   detail?: string;
 }
 
+export interface LinuxDoOAuthConfig {
+  enabled: boolean;
+  clientId?: string;
+  clientSecret?: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  userInfoUrl: string;
+  redirectUri?: string;
+  minTrustLevel: number;
+  autoRegister: boolean;
+  defaultRole: "owner" | "admin" | "user";
+}
+
 export interface ServerConfig {
   SiteName: string;
   StorageType: "localstorage" | "redis" | string;
+  LinuxDoOAuth?: LinuxDoOAuthConfig;
 }
 
 export class API {
@@ -115,6 +129,26 @@ export class API {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
+    return response.json();
+  }
+
+  async startLinuxDoOAuth(): Promise<string> {
+    const response = await this._fetch("/api/oauth/authorize");
+    if (response.status === 302 || response.redirected) {
+      return response.url;
+    }
+    const data = await response.json();
+    if (data.authorizeUrl) {
+      return data.authorizeUrl;
+    }
+    throw new Error("未能获取授权链接");
+  }
+
+  async handleOAuthCallback(code: string, state: string): Promise<{ ok: boolean; error?: string }> {
+    const response = await this._fetch(`/api/oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
+    if (response.status === 302 || response.redirected) {
+      return { ok: true };
+    }
     return response.json();
   }
 
@@ -216,6 +250,22 @@ export class API {
   async getVideoDetail(source: string, id: string): Promise<VideoDetail> {
     const url = `/api/detail?source=${source}&id=${id}`;
     const response = await this._fetch(url);
+    return response.json();
+  }
+
+  async register(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+    const response = await this._fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    return response.json();
+  }
+
+  async logout(): Promise<{ ok: boolean }> {
+    const response = await this._fetch("/api/logout", {
+      method: "POST",
+    });
     return response.json();
   }
 }

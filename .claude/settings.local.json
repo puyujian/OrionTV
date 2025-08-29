@@ -12,7 +12,8 @@
       "Bash(git reset:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(yarn test-ci:*)"
+      "Bash(yarn test-ci:*)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\callback/**)"
     ],
     "deny": []
   }

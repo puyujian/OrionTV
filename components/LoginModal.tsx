@@ -12,7 +12,14 @@ import { ThemedText } from "./ThemedText";
 import { StyledButton } from "./StyledButton";
 
 const LoginModal = () => {
-  const { isLoginModalVisible, hideLoginModal, checkLoginStatus } = useAuthStore();
+  const { 
+    isLoginModalVisible, 
+    hideLoginModal, 
+    checkLoginStatus,
+    showRegisterModal,
+    startLinuxDoOAuth,
+    isOAuthInProgress 
+  } = useAuthStore();
   const { serverConfig, apiBaseUrl } = useSettingsStore();
   const { refreshPlayRecords } = useHomeStore();
   const [username, setUsername] = useState("");
@@ -22,6 +29,9 @@ const LoginModal = () => {
   const passwordInputRef = useRef<TextInput>(null);
   const pathname = usePathname();
   const isSettingsPage = pathname.includes("settings");
+  
+  // Check if LinuxDo OAuth is enabled
+  const isLinuxDoOAuthEnabled = serverConfig?.LinuxDoOAuth?.enabled || false;
 
   // Load saved credentials when modal opens
   useEffect(() => {
@@ -54,6 +64,16 @@ const LoginModal = () => {
       return () => clearTimeout(focusTimeout);
     }
   }, [isLoginModalVisible, serverConfig, isSettingsPage]);
+
+  const handleLinuxDoLogin = async () => {
+    if (isOAuthInProgress) return;
+    await startLinuxDoOAuth();
+  };
+
+  const handleRegisterClick = () => {
+    hideLoginModal();
+    showRegisterModal();
+  };
 
   const handleLogin = async () => {
     const isLocalStorage = serverConfig?.StorageType === "localstorage";
@@ -139,6 +159,28 @@ const LoginModal = () => {
           >
             {isLoading && <ActivityIndicator color="#fff" />}
           </StyledButton>
+          
+          {/* LinuxDo OAuth Login Button */}
+          {isLinuxDoOAuthEnabled && (
+            <StyledButton
+              text={isOAuthInProgress ? "授权中..." : "使用 LinuxDo 登录"}
+              onPress={handleLinuxDoLogin}
+              disabled={isOAuthInProgress || isLoading}
+              style={[styles.button, styles.oauthButton]}
+            >
+              {isOAuthInProgress && <ActivityIndicator color="#fff" />}
+            </StyledButton>
+          )}
+          
+          {/* Register Button */}
+          {serverConfig?.StorageType !== "localstorage" && (
+            <StyledButton
+              text="注册新账号"
+              onPress={handleRegisterClick}
+              disabled={isLoading || isOAuthInProgress}
+              style={[styles.button, styles.registerButton]}
+            />
+          )}
         </ThemedView>
       </View>
     </Modal>
@@ -185,6 +227,14 @@ const styles = StyleSheet.create({
   button: {
     width: "100%",
     height: 50,
+    marginBottom: 12,
+  },
+  oauthButton: {
+    backgroundColor: "#4a90e2",
+  },
+  registerButton: {
+    backgroundColor: "#666",
+    marginBottom: 0,
   },
 });
 

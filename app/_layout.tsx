@@ -10,12 +10,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
 import LoginModal from "@/components/LoginModal";
+import RegisterModal from "@/components/RegisterModal";
 import useAuthStore from "@/stores/authStore";
 import { useUpdateStore, initUpdateStore } from "@/stores/updateStore";
 import { UpdateModal } from "@/components/UpdateModal";
 import { UPDATE_CONFIG } from "@/constants/UpdateConfig";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import Logger from '@/utils/Logger';
+import { Linking } from 'react-native';
 
 const logger = Logger.withTag('RootLayout');
 
@@ -29,7 +31,7 @@ export default function RootLayout() {
   });
   const { loadSettings, remoteInputEnabled, apiBaseUrl } = useSettingsStore();
   const { startServer, stopServer } = useRemoteControlStore();
-  const { checkLoginStatus } = useAuthStore();
+  const { checkLoginStatus, handleOAuthCallback } = useAuthStore();
   const { checkForUpdate, lastCheckTime } = useUpdateStore();
   const responsiveConfig = useResponsiveLayout();
 
@@ -68,13 +70,37 @@ export default function RootLayout() {
   }, [loaded, lastCheckTime, checkForUpdate]);
 
   useEffect(() => {
-    // 只有在非手机端才启动远程控制服务器
     if (remoteInputEnabled && responsiveConfig.deviceType !== "mobile") {
       startServer();
     } else {
       stopServer();
     }
   }, [remoteInputEnabled, startServer, stopServer, responsiveConfig.deviceType]);
+
+  // Handle OAuth deep links
+  useEffect(() => {
+    const handleDeepLink = (event: { url: string }) => {
+      const url = event.url;
+      // Check if this is an OAuth callback URL
+      if (url.includes('/oauth/callback') || url.includes('code=') || url.includes('state=')) {
+        handleOAuthCallback(url);
+      }
+    };
+
+    // Add deep link listener
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // Handle app launch with URL (when app was closed)
+    Linking.getInitialURL().then((url) => {
+      if (url && (url.includes('/oauth/callback') || url.includes('code=') || url.includes('state='))) {
+        handleOAuthCallback(url);
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [handleOAuthCallback]);
 
   if (!loaded && !error) {
     return null;
@@ -97,6 +123,7 @@ export default function RootLayout() {
         </View>
         <Toast />
         <LoginModal />
+        <RegisterModal />
         <UpdateModal />
       </ThemeProvider>
     </SafeAreaProvider>

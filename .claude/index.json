@@ -1,0 +1,141 @@
+{
+  "timestamp": "2025-08-29T16:16:03+08:00",
+  "project_name": "OrionTV",
+  "scan_version": "1.0.0",
+  "total_files_estimated": 88,
+  "files_scanned": 88,
+  "coverage_percentage": 100,
+  "scan_status": "complete",
+  "truncated": false,
+  "root_module": {
+    "path": "./",
+    "type": "root",
+    "description": "React Native TVOS 视频流媒体应用",
+    "entry_files": ["app/_layout.tsx", "app/index.tsx"],
+    "package_manager": "yarn",
+    "main_technologies": ["React Native TVOS", "Expo SDK 51", "TypeScript", "Zustand"]
+  },
+  "modules": [
+    {
+      "path": "./app",
+      "type": "routes",
+      "description": "应用路由和页面组件",
+      "entry_files": ["_layout.tsx", "index.tsx"],
+      "key_interfaces": ["Stack.Screen配置", "路由导航"],
+      "important_files": ["_layout.tsx", "index.tsx", "play.tsx", "detail.tsx", "settings.tsx"],
+      "test_coverage": "none",
+      "missing_tests": true,
+      "coverage_gaps": ["路由逻辑测试", "页面组件测试", "导航测试"]
+    },
+    {
+      "path": "./components",
+      "type": "ui_components",
+      "description": "可重用UI组件库，支持多平台响应式设计",
+      "entry_files": ["VideoCard.tsx", "PlayerControls.tsx"],
+      "key_interfaces": ["响应式组件接口", "TV交互接口"],
+      "important_files": [
+        "VideoCard.tsx", "VideoCard.tv.tsx", "VideoCard.mobile.tsx", "VideoCard.tablet.tsx",
+        "PlayerControls.tsx", "StyledButton.tsx", "ResponsiveVideoCard.tsx"
+      ],
+      "submodules": [
+        {"path": "./components/navigation", "description": "导航组件"},
+        {"path": "./components/settings", "description": "设置组件"}
+      ],
+      "test_coverage": "basic",
+      "missing_tests": false,
+      "coverage_gaps": ["平台变体测试", "TV交互测试"]
+    },
+    {
+      "path": "./services",
+      "type": "service_layer",
+      "description": "外部API与数据服务层",
+      "entry_files": ["api.ts"],
+      "key_interfaces": ["API响应接口", "远程控制接口"],
+      "important_files": ["api.ts", "remoteControlService.ts", "storage.ts", "updateService.ts", "tcpHttpServer.ts"],
+      "test_coverage": "none",
+      "missing_tests": true,
+      "coverage_gaps": ["API集成测试", "远程控制测试", "存储服务测试"]
+    },
+    {
+      "path": "./stores",
+      "type": "state_management",
+      "description": "Zustand状态管理存储",
+      "entry_files": ["homeStore.ts", "playerStore.ts"],
+      "key_interfaces": ["存储状态接口", "动作接口"],
+      "important_files": [
+        "homeStore.ts", "playerStore.ts", "settingsStore.ts", "authStore.ts", 
+        "updateStore.ts", "favoritesStore.ts", "remoteControlStore.ts"
+      ],
+      "test_coverage": "none",
+      "missing_tests": true,
+      "coverage_gaps": ["状态管理测试", "存储持久化测试", "跨存储依赖测试"]
+    },
+    {
+      "path": "./hooks",
+      "type": "custom_hooks",
+      "description": "自定义React钩子",
+      "entry_files": ["useTVRemoteHandler.ts"],
+      "key_interfaces": ["钩子返回值接口", "TV事件接口"],
+      "important_files": [
+        "useTVRemoteHandler.ts", "useResponsiveLayout.ts", "useApiConfig.ts", 
+        "useVideoHandlers.ts", "useScale.ts"
+      ],
+      "test_coverage": "none",
+      "missing_tests": true,
+      "coverage_gaps": ["钩子行为测试", "TV遥控器事件测试", "响应式逻辑测试"]
+    },
+    {
+      "path": "./constants",
+      "type": "configuration",
+      "description": "应用常量和配置",
+      "entry_files": ["UpdateConfig.ts"],
+      "key_interfaces": ["配置接口"],
+      "important_files": ["UpdateConfig.ts", "Colors.ts", "TextStyles.ts"],
+      "test_coverage": "none",
+      "missing_tests": true,
+      "coverage_gaps": ["配置验证测试"]
+    },
+    {
+      "path": "./utils",
+      "type": "utilities",
+      "description": "通用工具函数",
+      "entry_files": ["DeviceUtils.ts"],
+      "key_interfaces": ["设备检测接口", "响应式工具接口"],
+      "important_files": ["DeviceUtils.ts", "ResponsiveStyles.ts", "Logger.ts"],
+      "test_coverage": "complete",
+      "missing_tests": false,
+      "coverage_gaps": []
+    }
+  ],
+  "ignored_patterns": [
+    "node_modules/**", ".expo/**", "dist/**", "ios/**", "android/**",
+    "*.jks", "*.p8", "*.p12", "*.key", "*.mobileprovision", "*.orig.*",
+    "web-build/**", ".DS_Store", ".vscode", "web/**", "coverage/**"
+  ],
+  "ignored_files_count": 0,
+  "coverage_summary": {
+    "modules_with_tests": 2,
+    "modules_without_tests": 5,
+    "test_coverage_percentage": 28.6,
+    "primary_test_gaps": [
+      "stores/ - 状态管理测试缺失",
+      "services/ - API和服务层测试缺失", 
+      "hooks/ - 自定义钩子测试缺失",
+      "app/ - 路由和页面测试缺失"
+    ]
+  },
+  "next_steps_recommendations": [
+    "优先补充 stores/ 模块的单元测试",
+    "为 services/api.ts 添加集成测试",
+    "为 hooks/useTVRemoteHandler.ts 添加TV遥控器测试",
+    "为 app/ 路由组件添加导航测试",
+    "考虑添加端到端测试覆盖关键用户流程"
+  ],
+  "architecture_insights": {
+    "design_pattern": "多平台响应式设计",
+    "state_management": "Zustand (轻量级)",
+    "routing": "Expo Router (文件系统路由)",
+    "platform_strategy": "TV优先，移动端适配",
+    "key_features": ["遥控器支持", "响应式布局", "远程控制服务器", "自动更新"]
+  }
+}
