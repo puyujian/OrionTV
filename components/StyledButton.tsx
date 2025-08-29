@@ -34,6 +34,7 @@ export const StyledButton = forwardRef<View, StyledButtonProps>(
           backgroundColor: colors.primary,
         },
         focusedButton: {
+          borderWidth: 2,
           borderColor: colors.primary,
         },
         selectedText: {
@@ -49,6 +50,7 @@ export const StyledButton = forwardRef<View, StyledButtonProps>(
         },
         focusedButton: {
           backgroundColor: colors.primary,
+          borderWidth: 2,
           borderColor: colors.background,
         },
         selectedButton: {
@@ -67,6 +69,7 @@ export const StyledButton = forwardRef<View, StyledButtonProps>(
         },
         focusedButton: {
           backgroundColor: "rgba(119, 119, 119, 0.2)",
+          borderWidth: 2,
           borderColor: colors.primary,
         },
         selectedButton: {},
@@ -79,7 +82,7 @@ export const StyledButton = forwardRef<View, StyledButtonProps>(
         paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 8,
-        borderWidth: 2,
+        borderWidth: 0,
         borderColor: "transparent",
         flexDirection: "row",
         alignItems: "center",
@@ -87,6 +90,7 @@ export const StyledButton = forwardRef<View, StyledButtonProps>(
       },
       focusedButton: {
         backgroundColor: colors.link,
+        borderWidth: 2,
         borderColor: colors.background,
         elevation: 5,
         shadowColor: colors.link,

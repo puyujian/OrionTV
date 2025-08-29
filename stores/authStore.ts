@@ -25,7 +25,7 @@ interface AuthState {
   hideRegisterModal: () => void;
   checkLoginStatus: (apiBaseUrl?: string) => Promise<void>;
   logout: () => Promise<void>;
-  register: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, password: string, confirmPassword?: string) => Promise<boolean>;
   startLinuxDoOAuth: () => Promise<void>;
   handleOAuthCallback: (url: string) => Promise<boolean>;
 }
@@ -120,9 +120,9 @@ const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   
-  register: async (username: string, password: string): Promise<boolean> => {
+  register: async (username: string, password: string, confirmPassword?: string): Promise<boolean> => {
     try {
-      const result = await api.register(username, password);
+      const result = await api.register(username, password, confirmPassword);
       if (result.ok) {
         Toast.show({ type: "success", text1: "注册成功", text2: "请使用新账号登录" });
         set({ isRegisterModalVisible: false, isLoginModalVisible: true });

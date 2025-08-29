@@ -56,7 +56,7 @@ const RegisterModal = () => {
     }
 
     setIsLoading(true);
-    const success = await register(username.trim(), password);
+    const success = await register(username.trim(), password, confirmPassword);
     setIsLoading(false);
 
     if (success) {

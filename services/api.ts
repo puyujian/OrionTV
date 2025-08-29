@@ -133,14 +133,34 @@ export class API {
   }
 
   async startLinuxDoOAuth(): Promise<string> {
-    const response = await this._fetch("/api/oauth/authorize");
-    if (response.status === 302 || response.redirected) {
+    const response = await this._fetch("/api/oauth/authorize", {
+      method: "GET",
+      redirect: "manual" // 阻止自动重定向
+    });
+    
+    // 处理重定向响应
+    if (response.status === 302 || response.type === 'opaqueredirect') {
+      const location = response.headers.get('location');
+      if (location) {
+        return location;
+      }
+    }
+    
+    // 处理重定向后的URL
+    if (response.redirected && response.url) {
       return response.url;
     }
-    const data = await response.json();
-    if (data.authorizeUrl) {
-      return data.authorizeUrl;
+    
+    // 尝试从JSON响应获取授权URL
+    try {
+      const data = await response.json();
+      if (data.authorizeUrl) {
+        return data.authorizeUrl;
+      }
+    } catch (e) {
+      // 忽略JSON解析错误
     }
+    
     throw new Error("未能获取授权链接");
   }
 
@@ -253,11 +273,11 @@ export class API {
     return response.json();
   }
 
-  async register(username: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  async register(username: string, password: string, confirmPassword?: string): Promise<{ ok: boolean; error?: string }> {
     const response = await this._fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, confirmPassword: confirmPassword || password }),
     });
     return response.json();
   }
