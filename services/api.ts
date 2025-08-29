@@ -134,10 +134,28 @@ export class API {
 
   async startLinuxDoOAuth(): Promise<string> {
     try {
-      // 第一步：获取授权URL，跟随重定向
-      const response = await this._fetch("/api/oauth/authorize?mobile=1", {
+      // 直接请求授权接口，让它重定向到LinuxDo
+      const response = await fetch(`${this.baseURL}/api/oauth/authorize?mobile=1`, {
         method: "GET",
-        redirect: "follow", // 允许自动重定向
+        redirect: "manual", // 手动处理重定向，这样我们可以获取重定向的URL
+        headers: {
+          'X-Mobile-App': 'true',
+          'User-Agent': 'OrionTV-Mobile'
+        }
+      });
+      
+      // 检查是否是重定向响应
+      if (response.status === 302 || response.status === 301) {
+        const location = response.headers.get('Location');
+        if (location && location.includes('connect.linux.do')) {
+          return location;
+        }
+      }
+      
+      // 如果不是重定向，检查最终响应的URL（通过follow模式）
+      const followResponse = await fetch(`${this.baseURL}/api/oauth/authorize?mobile=1`, {
+        method: "GET",
+        redirect: "follow",
         headers: {
           'X-Mobile-App': 'true',
           'User-Agent': 'OrionTV-Mobile'
@@ -145,22 +163,21 @@ export class API {
       });
       
       // 检查最终响应的URL
-      if (response.url && response.url.includes('connect.linux.do')) {
-        return response.url;
+      if (followResponse.url && followResponse.url.includes('connect.linux.do')) {
+        return followResponse.url;
       }
       
-      // 尝试从响应体解析授权URL
-      if (response.ok) {
+      // 如果还是没有获取到正确的URL，尝试从响应体解析
+      if (followResponse.ok) {
         try {
-          const data = await response.json();
-          if (data.authorizeUrl) {
+          const data = await followResponse.json();
+          if (data.authorizeUrl && data.authorizeUrl.includes('connect.linux.do')) {
             return data.authorizeUrl;
           }
         } catch (e) {
           // 如果不是JSON，尝试从HTML中解析
           try {
-            const html = await response.text();
-            // 查找可能的授权链接
+            const html = await followResponse.text();
             const linkMatch = html.match(/href="([^"]*connect\.linux\.do[^"]*)"/i);
             if (linkMatch && linkMatch[1]) {
               return linkMatch[1];
@@ -171,12 +188,23 @@ export class API {
         }
       }
       
-      throw new Error(`未能获取授权链接，响应状态：${response.status}`);
+      // 如果所有方法都失败，抛出具体的错误信息
+      throw new Error(`获取授权链接失败。响应状态：${followResponse.status}`);
+      
     } catch (error) {
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('网络连接失败，请检查网络设置');
+      }
+      
       if (error instanceof Error) {
+        // 特殊处理HTTP 429错误
+        if (error.message.includes('429')) {
+          throw new Error('请求频率过高，请稍后再试');
+        }
         throw new Error(`OAuth启动失败: ${error.message}`);
       }
-      throw new Error("OAuth启动失败: 网络错误");
+      
+      throw new Error("OAuth启动失败: 未知错误");
     }
   }
 

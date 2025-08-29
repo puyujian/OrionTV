@@ -146,6 +146,11 @@ const useAuthStore = create<AuthState>((set, get) => ({
       const authorizeUrl = await api.startLinuxDoOAuth();
       logger.info("Got authorize URL:", authorizeUrl);
       
+      // 验证授权链接的有效性
+      if (!authorizeUrl || !authorizeUrl.includes('connect.linux.do')) {
+        throw new Error("获取的授权链接无效");
+      }
+      
       // 使用系统浏览器打开授权页面
       const supported = await Linking.canOpenURL(authorizeUrl);
       if (supported) {
@@ -157,7 +162,20 @@ const useAuthStore = create<AuthState>((set, get) => ({
           text2: "完成后返回应用" 
         });
       } else {
-        throw new Error("无法打开浏览器");
+        // 如果无法直接打开URL，尝试先打开浏览器再打开链接
+        try {
+          await Linking.openURL('https://');  // 先尝试打开浏览器
+          setTimeout(async () => {
+            await Linking.openURL(authorizeUrl);
+          }, 1000);
+          Toast.show({ 
+            type: "info", 
+            text1: "请在浏览器中完成授权", 
+            text2: "如果页面未自动打开，请手动访问授权链接" 
+          });
+        } catch (browserError) {
+          throw new Error("无法打开浏览器，请检查系统设置");
+        }
       }
     } catch (error) {
       logger.error("Failed to start LinuxDo OAuth:", error);
