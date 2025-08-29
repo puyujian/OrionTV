@@ -178,34 +178,20 @@ export class API {
       console.log('OAuth authorize response status:', response.status);
       console.log('OAuth authorize response headers:', Object.fromEntries(response.headers.entries()));
       
-      // 处理重定向响应 - 第一次重定向的链接就是OAuth2授权地址
+      // 直接获取第一次重定向的目标链接作为授权地址
       if (response.status === 302 || response.status === 301 || response.status === 307) {
         const location = response.headers.get('Location');
-        console.log('First redirect location (OAuth2 authorization URL):', location);
+        console.log('First redirect location (this is our authorization URL):', location);
         
-        // 第一次重定向的链接就是我们需要的OAuth2授权地址，直接返回
-        if (location && location.includes('connect.linux.do/oauth2/authorize')) {
-          console.log('Using OAuth2 authorization URL from first redirect:', location);
-          return location;
+        if (location) {
+          console.log('Returning first redirect URL as authorization URL:', location);
+          return location; // 直接返回第一次重定向的目标，不做任何验证和处理
         }
         
-        // 如果第一次重定向不是预期的OAuth2格式，仍然返回它（可能是授权地址的变体）
-        if (location && location.includes('linux.do')) {
-          console.log('Using redirect URL as authorization URL:', location);
-          return location;
-        }
-        
-        throw new Error(`第一次重定向失败，未找到授权链接: ${location}`);
+        throw new Error(`第一次重定向失败，Location头为空`);
       }
       
-      // 从Location头中获取OAuth2授权链接（非重定向情况）
-      const location = response.headers.get('Location');
-      if (location && location.includes('connect.linux.do/oauth2/authorize')) {
-        console.log('Found OAuth2 authorization URL:', location);
-        return location;
-      }
-      
-      // 尝试从响应体中获取OAuth2授权链接
+      // 如果不是重定向，尝试从响应体获取授权链接
       try {
         const contentType = response.headers.get('Content-Type') || '';
         

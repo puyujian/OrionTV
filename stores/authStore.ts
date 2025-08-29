@@ -171,17 +171,12 @@ const useAuthStore = create<AuthState>((set, get) => ({
       const authorizeUrl = await api.startLinuxDoOAuth();
       logger.info("Got authorize URL:", authorizeUrl);
       
-      // 验证授权链接的有效性
+      // 基本验证：确保授权链接不为空
       if (!authorizeUrl || typeof authorizeUrl !== 'string') {
         throw new Error("获取的授权链接无效：链接为空");
       }
       
-      // 验证是否是有效的LinuxDo授权链接
-      if (!authorizeUrl.includes('linux.do')) {
-        throw new Error(`获取的授权链接无效：${authorizeUrl}`);
-      }
-      
-      logger.info("Using authorization URL:", authorizeUrl);
+      logger.info("Got authorization URL from server:", authorizeUrl);
       
       logger.info("Attempting to open browser with URL:", authorizeUrl);
       
