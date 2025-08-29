@@ -134,86 +134,95 @@ export class API {
 
   async startLinuxDoOAuth(): Promise<string> {
     try {
-      // 直接请求授权接口，让它重定向到LinuxDo
-      const response = await fetch(`${this.baseURL}/api/oauth/authorize?mobile=1`, {
+      const response = await fetch(`${this.baseURL}/api/oauth/authorize`, {
         method: "GET",
-        redirect: "manual", // 手动处理重定向，这样我们可以获取重定向的URL
+        redirect: "manual",
         headers: {
           'X-Mobile-App': 'true',
-          'User-Agent': 'OrionTV-Mobile'
+          'User-Agent': 'OrionTV/1.0 Mobile'
         }
       });
       
-      // 检查是否是重定向响应
       if (response.status === 302 || response.status === 301) {
         const location = response.headers.get('Location');
         if (location && location.includes('connect.linux.do')) {
           return location;
         }
+        throw new Error(`授权重定向失败: ${location}`);
       }
       
-      // 如果不是重定向，检查最终响应的URL（通过follow模式）
-      const followResponse = await fetch(`${this.baseURL}/api/oauth/authorize?mobile=1`, {
-        method: "GET",
-        redirect: "follow",
-        headers: {
-          'X-Mobile-App': 'true',
-          'User-Agent': 'OrionTV-Mobile'
-        }
-      });
-      
-      // 检查最终响应的URL
-      if (followResponse.url && followResponse.url.includes('connect.linux.do')) {
-        return followResponse.url;
+      if (response.status === 403) {
+        throw new Error('LinuxDo OAuth 功能未启用');
       }
       
-      // 如果还是没有获取到正确的URL，尝试从响应体解析
-      if (followResponse.ok) {
-        try {
-          const data = await followResponse.json();
-          if (data.authorizeUrl && data.authorizeUrl.includes('connect.linux.do')) {
-            return data.authorizeUrl;
-          }
-        } catch (e) {
-          // 如果不是JSON，尝试从HTML中解析
-          try {
-            const html = await followResponse.text();
-            const linkMatch = html.match(/href="([^"]*connect\.linux\.do[^"]*)"/i);
-            if (linkMatch && linkMatch[1]) {
-              return linkMatch[1];
-            }
-          } catch (htmlError) {
-            // 忽略HTML解析错误
-          }
-        }
+      if (response.status === 500) {
+        throw new Error('OAuth 配置不完整，请联系管理员');
       }
       
-      // 如果所有方法都失败，抛出具体的错误信息
-      throw new Error(`获取授权链接失败。响应状态：${followResponse.status}`);
+      throw new Error(`获取授权链接失败，状态码: ${response.status}`);
       
     } catch (error) {
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        throw new Error('网络连接失败，请检查网络设置');
+        throw new Error('网络连接失败，请检查服务器地址和网络设置');
       }
       
       if (error instanceof Error) {
-        // 特殊处理HTTP 429错误
-        if (error.message.includes('429')) {
-          throw new Error('请求频率过高，请稍后再试');
-        }
-        throw new Error(`OAuth启动失败: ${error.message}`);
+        throw error;
       }
       
-      throw new Error("OAuth启动失败: 未知错误");
+      throw new Error('OAuth启动失败: 未知错误');
     }
   }
 
   async handleOAuthCallback(code: string, state: string): Promise<{ ok: boolean; error?: string }> {
-    const response = await this._fetch(`/api/oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`);
-    if (response.status === 302 || response.redirected) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/oauth/callback`, {
+        method: "GET",
+        headers: {
+          'X-Mobile-App': 'true',
+          'User-Agent': 'OrionTV/1.0 Mobile'
+        },
+        redirect: "manual"
+      });
+      
+      const url = new URL(`${this.baseURL}/api/oauth/callback`);
+      url.searchParams.set('code', code);
+      url.searchParams.set('state', state);
+      
+      const callbackResponse = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          'X-Mobile-App': 'true',
+          'User-Agent': 'OrionTV/1.0 Mobile'
+        },
+        redirect: "manual"
+      });
+      
+      if (callbackResponse.status === 302 || callbackResponse.status === 301) {
+        const location = callbackResponse.headers.get('Location');
+        if (location?.includes('oriontv://oauth/callback?success=true')) {
+          return { ok: true };
+        }
+        if (location?.includes('error=')) {
+          const errorMatch = location.match(/error=([^&]+)/);
+          const error = errorMatch ? decodeURIComponent(errorMatch[1]) : '授权失败';
+          return { ok: false, error };
+        }
+        return { ok: true }; // 其他重定向也认为是成功
+      }
+      
+      if (!callbackResponse.ok) {
+        const errorText = await callbackResponse.text();
+        return { ok: false, error: `回调处理失败: ${errorText}` };
+      }
+      
       return { ok: true };
+    } catch (error) {
+      if (error instanceof Error) {
+        return { ok: false, error: error.message };
+      }
+      return { ok: false, error: '回调处理失败' };
     }
-    return response.json();
   }
 
   async getFavorites(key?: string): Promise<Record<string, Favorite> | Favorite | null> {

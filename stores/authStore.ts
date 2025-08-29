@@ -149,98 +149,36 @@ const useAuthStore = create<AuthState>((set, get) => ({
       const authorizeUrl = await api.startLinuxDoOAuth();
       logger.info("Got authorize URL:", authorizeUrl);
       
-      // 验证授权链接的有效性
       if (!authorizeUrl || !authorizeUrl.includes('connect.linux.do')) {
         throw new Error("获取的授权链接无效");
       }
       
-      // 多种方式尝试打开浏览器
-      let browserOpened = false;
+      logger.info("Attempting to open browser with URL:", authorizeUrl);
+      const supported = await Linking.canOpenURL(authorizeUrl);
       
-      try {
-        // 方式1: 直接打开授权URL
-        logger.info("Attempting to open browser with URL:", authorizeUrl);
-        const supported = await Linking.canOpenURL(authorizeUrl);
-        logger.info("URL supported:", supported);
-        
-        if (supported) {
-          await Linking.openURL(authorizeUrl);
-          browserOpened = true;
-          logger.info("Successfully opened browser via direct URL");
-        }
-      } catch (directError) {
-        logger.warn("Direct URL opening failed:", directError);
-      }
-      
-      // 方式2: 如果直接打开失败，尝试先打开浏览器再打开链接
-      if (!browserOpened) {
-        try {
-          logger.info("Attempting to open browser first, then navigate to URL");
-          
-          // 尝试打开默认浏览器
-          const browserSupported = await Linking.canOpenURL('https://www.baidu.com');
-          if (browserSupported) {
-            await Linking.openURL('https://www.baidu.com');
-            // 给浏览器一点时间启动
-            setTimeout(async () => {
-              try {
-                await Linking.openURL(authorizeUrl);
-                logger.info("Successfully opened browser via two-step approach");
-              } catch (delayedError) {
-                logger.error("Delayed URL opening failed:", delayedError);
-              }
-            }, 2000);
-            browserOpened = true;
-          }
-        } catch (browserError) {
-          logger.warn("Browser-first approach failed:", browserError);
-        }
-      }
-      
-      // 方式3: 如果还是失败，尝试使用不同的URL格式
-      if (!browserOpened) {
-        try {
-          logger.info("Attempting to open with http protocol");
-          const httpUrl = authorizeUrl.replace('https://', 'http://');
-          await Linking.openURL(httpUrl);
-          browserOpened = true;
-          logger.info("Successfully opened browser with http protocol");
-        } catch (httpError) {
-          logger.warn("HTTP protocol attempt failed:", httpError);
-        }
-      }
-      
-      if (browserOpened) {
+      if (supported) {
+        await Linking.openURL(authorizeUrl);
+        logger.info("Successfully opened browser");
         Toast.show({ 
           type: "info", 
           text1: "请在浏览器中完成授权", 
           text2: "完成后返回应用" 
         });
       } else {
-        // 如果所有方式都失败，保存链接供用户手动复制
-        logger.error("All browser opening attempts failed");
+        logger.error("Cannot open URL, saving for manual copy");
         set({ oAuthUrl: authorizeUrl });
         Toast.show({ 
           type: "info", 
           text1: "请手动打开浏览器", 
           text2: "点击下方\"复制授权链接\"按钮" 
         });
-        
-        // 不要设置 isOAuthInProgress 为 false，因为用户可能会手动打开
-        return;
       }
     } catch (error) {
       logger.error("Failed to start LinuxDo OAuth:", error);
-      let errorMessage = "请检查网络连接";
+      let errorMessage = "请检查网络连接和服务器地址";
       
       if (error instanceof Error) {
-        if (error.message.includes("获取授权链接失败")) {
-          errorMessage = error.message;
-        } else if (error.message.includes("获取的授权链接无效")) {
-          errorMessage = "服务器返回的授权链接无效";
-        } else {
-          errorMessage = error.message;
-        }
+        errorMessage = error.message;
       }
       
       Toast.show({ 
@@ -254,22 +192,22 @@ const useAuthStore = create<AuthState>((set, get) => ({
   
   handleOAuthCallback: async (url: string): Promise<boolean> => {
     try {
+      logger.info("Handling OAuth callback:", url);
       const urlObj = new URL(url);
       
-      // 处理深度链接格式 oriontv://oauth/callback?success=true 或 error=xxx
       if (url.startsWith('oriontv://oauth/callback')) {
         const success = urlObj.searchParams.get('success');
         const error = urlObj.searchParams.get('error');
         
         if (success === 'true') {
-          // OAuth成功，重新检查登录状态
           const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
           await get().checkLoginStatus(apiBaseUrl);
           
           Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
           set({ 
             isOAuthInProgress: false, 
-            isLoginModalVisible: false 
+            isLoginModalVisible: false,
+            oAuthUrl: undefined
           });
           return true;
         }
@@ -281,7 +219,6 @@ const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
       
-      // 处理传统web回调格式
       const code = urlObj.searchParams.get('code');
       const state = urlObj.searchParams.get('state');
       const error = urlObj.searchParams.get('error');
@@ -300,14 +237,14 @@ const useAuthStore = create<AuthState>((set, get) => ({
       
       const result = await api.handleOAuthCallback(code, state);
       if (result.ok) {
-        // 重新检查登录状态
         const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
         await get().checkLoginStatus(apiBaseUrl);
         
         Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
         set({ 
           isOAuthInProgress: false, 
-          isLoginModalVisible: false 
+          isLoginModalVisible: false,
+          oAuthUrl: undefined
         });
         return true;
       } else {
@@ -327,7 +264,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   
-  clearOAuthUrl: () => set({ oAuthUrl: undefined }),
+  clearOAuthUrl: () => set({ oAuthUrl: undefined, isOAuthInProgress: false }),
 }));
 
 export default useAuthStore;
