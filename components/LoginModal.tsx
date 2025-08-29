@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Modal, View, TextInput, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { Modal, View, TextInput, StyleSheet, ActivityIndicator, Alert, Clipboard } from "react-native";
 import { usePathname } from "expo-router";
 import Toast from "react-native-toast-message";
 import useAuthStore from "@/stores/authStore";
@@ -18,7 +18,9 @@ const LoginModal = () => {
     checkLoginStatus,
     showRegisterModal,
     startLinuxDoOAuth,
-    isOAuthInProgress 
+    isOAuthInProgress,
+    oAuthUrl,
+    clearOAuthUrl
   } = useAuthStore();
   const { serverConfig, apiBaseUrl } = useSettingsStore();
   const { refreshPlayRecords } = useHomeStore();
@@ -73,6 +75,18 @@ const LoginModal = () => {
   const handleRegisterClick = () => {
     hideLoginModal();
     showRegisterModal();
+  };
+
+  const handleCopyOAuthUrl = async () => {
+    if (oAuthUrl) {
+      await Clipboard.setString(oAuthUrl);
+      Toast.show({ 
+        type: "success", 
+        text1: "链接已复制", 
+        text2: "请在浏览器中粘贴并打开" 
+      });
+      clearOAuthUrl();
+    }
   };
 
   const handleLogin = async () => {
@@ -172,6 +186,16 @@ const LoginModal = () => {
             </StyledButton>
           )}
           
+          {/* Copy OAuth URL Button - shown when browser fails to open */}
+          {oAuthUrl && (
+            <StyledButton
+              text="复制授权链接"
+              onPress={handleCopyOAuthUrl}
+              disabled={isLoading}
+              style={[styles.button, styles.copyButton]}
+            />
+          )}
+          
           {/* Register Button */}
           {serverConfig?.StorageType !== "localstorage" && (
             <StyledButton
@@ -228,6 +252,9 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 50,
     marginBottom: 12,
+  },
+  copyButton: {
+    backgroundColor: "#ff6b35",
   },
 });
 

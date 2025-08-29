@@ -13,6 +13,7 @@ interface AuthState {
   isLoginModalVisible: boolean;
   isRegisterModalVisible: boolean;
   isOAuthInProgress: boolean;
+  oAuthUrl?: string;
   currentUser?: {
     username: string;
     role?: 'owner' | 'admin' | 'user';
@@ -28,6 +29,7 @@ interface AuthState {
   register: (username: string, password: string, confirmPassword?: string) => Promise<boolean>;
   startLinuxDoOAuth: () => Promise<void>;
   handleOAuthCallback: (url: string) => Promise<boolean>;
+  clearOAuthUrl: () => void;
 }
 
 const useAuthStore = create<AuthState>((set, get) => ({
@@ -35,6 +37,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
   isLoginModalVisible: false,
   isRegisterModalVisible: false,
   isOAuthInProgress: false,
+  oAuthUrl: undefined,
   currentUser: undefined,
   showLoginModal: () => set({ isLoginModalVisible: true }),
   hideLoginModal: () => set({ isLoginModalVisible: false }),
@@ -151,35 +154,95 @@ const useAuthStore = create<AuthState>((set, get) => ({
         throw new Error("获取的授权链接无效");
       }
       
-      // 使用系统浏览器打开授权页面
-      const supported = await Linking.canOpenURL(authorizeUrl);
-      if (supported) {
-        logger.info("Opening browser with URL:", authorizeUrl);
-        await Linking.openURL(authorizeUrl);
+      // 多种方式尝试打开浏览器
+      let browserOpened = false;
+      
+      try {
+        // 方式1: 直接打开授权URL
+        logger.info("Attempting to open browser with URL:", authorizeUrl);
+        const supported = await Linking.canOpenURL(authorizeUrl);
+        logger.info("URL supported:", supported);
+        
+        if (supported) {
+          await Linking.openURL(authorizeUrl);
+          browserOpened = true;
+          logger.info("Successfully opened browser via direct URL");
+        }
+      } catch (directError) {
+        logger.warn("Direct URL opening failed:", directError);
+      }
+      
+      // 方式2: 如果直接打开失败，尝试先打开浏览器再打开链接
+      if (!browserOpened) {
+        try {
+          logger.info("Attempting to open browser first, then navigate to URL");
+          
+          // 尝试打开默认浏览器
+          const browserSupported = await Linking.canOpenURL('https://www.baidu.com');
+          if (browserSupported) {
+            await Linking.openURL('https://www.baidu.com');
+            // 给浏览器一点时间启动
+            setTimeout(async () => {
+              try {
+                await Linking.openURL(authorizeUrl);
+                logger.info("Successfully opened browser via two-step approach");
+              } catch (delayedError) {
+                logger.error("Delayed URL opening failed:", delayedError);
+              }
+            }, 2000);
+            browserOpened = true;
+          }
+        } catch (browserError) {
+          logger.warn("Browser-first approach failed:", browserError);
+        }
+      }
+      
+      // 方式3: 如果还是失败，尝试使用不同的URL格式
+      if (!browserOpened) {
+        try {
+          logger.info("Attempting to open with http protocol");
+          const httpUrl = authorizeUrl.replace('https://', 'http://');
+          await Linking.openURL(httpUrl);
+          browserOpened = true;
+          logger.info("Successfully opened browser with http protocol");
+        } catch (httpError) {
+          logger.warn("HTTP protocol attempt failed:", httpError);
+        }
+      }
+      
+      if (browserOpened) {
         Toast.show({ 
           type: "info", 
           text1: "请在浏览器中完成授权", 
           text2: "完成后返回应用" 
         });
       } else {
-        // 如果无法直接打开URL，尝试先打开浏览器再打开链接
-        try {
-          await Linking.openURL('https://');  // 先尝试打开浏览器
-          setTimeout(async () => {
-            await Linking.openURL(authorizeUrl);
-          }, 1000);
-          Toast.show({ 
-            type: "info", 
-            text1: "请在浏览器中完成授权", 
-            text2: "如果页面未自动打开，请手动访问授权链接" 
-          });
-        } catch (browserError) {
-          throw new Error("无法打开浏览器，请检查系统设置");
-        }
+        // 如果所有方式都失败，保存链接供用户手动复制
+        logger.error("All browser opening attempts failed");
+        set({ oAuthUrl: authorizeUrl });
+        Toast.show({ 
+          type: "info", 
+          text1: "请手动打开浏览器", 
+          text2: "点击下方"复制授权链接"按钮" 
+        });
+        
+        // 不要设置 isOAuthInProgress 为 false，因为用户可能会手动打开
+        return;
       }
     } catch (error) {
       logger.error("Failed to start LinuxDo OAuth:", error);
-      const errorMessage = error instanceof Error ? error.message : "请检查网络连接";
+      let errorMessage = "请检查网络连接";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("获取授权链接失败")) {
+          errorMessage = error.message;
+        } else if (error.message.includes("获取的授权链接无效")) {
+          errorMessage = "服务器返回的授权链接无效";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       Toast.show({ 
         type: "error", 
         text1: "启动授权失败", 
@@ -263,6 +326,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     }
   },
+  
+  clearOAuthUrl: () => set({ oAuthUrl: undefined }),
 }));
 
 export default useAuthStore;
