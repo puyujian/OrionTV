@@ -4,6 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 变更记录 (Changelog)
 
+### 2025年08月29日 18:30:00
+- 设置默认API地址为 https://tv.pei.ee
+- 完整适配LINUXDO登录和注册功能
+- 新增LinuxDo OAuth2认证支持
+- 新增用户注册功能和RegisterModal组件
+- 集成深度链接处理OAuth回调
+- 优化TV遥控器焦点管理和响应式布局
+
 ### 2025年08月29日 16:16:03
 - 项目初始化：完成架构扫描与文档生成
 - 新增模块结构图（Mermaid）和详细模块索引

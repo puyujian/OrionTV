@@ -31,7 +31,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  apiBaseUrl: "",
+  apiBaseUrl: "https://tv.pei.ee",
   m3uUrl: "",
   liveStreamSources: [],
   remoteInputEnabled: false,
@@ -53,6 +53,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         sources: {},
       },
     });
+    // 总是设置API基础URL，包括默认值
     if (settings.apiBaseUrl) {
       api.setBaseUrl(settings.apiBaseUrl);
       await get().fetchServerConfig();
