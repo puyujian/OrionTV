@@ -216,6 +216,7 @@ export class API {
         } catch (jsonError) {
           console.warn('Failed to parse JSON response:', jsonError);
         }
+      }
       
       // 如果所有方法都失败，提供详细错误信息
       const responseText = await response.text().catch(() => '无法获取响应内容');
