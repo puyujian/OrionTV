@@ -30,6 +30,8 @@ interface AuthState {
   startLinuxDoOAuth: () => Promise<void>;
   handleOAuthCallback: (url: string) => Promise<boolean>;
   clearOAuthUrl: () => void;
+  _handleSuccessfulOAuth: () => Promise<boolean>;
+  _waitForCookieAndRefreshStatus: (apiBaseUrl: string) => Promise<void>;
 }
 
 const useAuthStore = create<AuthState>((set, get) => ({
@@ -79,24 +81,33 @@ const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
       
-      // 多次尝试获取Cookie，有时候需要一点时间来生效
+      // 优化Cookie获取逻辑，增加重试机制和更好的错误处理
       let cookies = null;
-      const maxRetries = 3;
+      const maxRetries = 5; // 增加重试次数
+      const retryDelay = 800; // 增加重试间隔
       
       for (let i = 0; i < maxRetries; i++) {
         try {
           cookies = await Cookies.get(api.baseURL);
+          logger.info(`Cookie retrieval attempt ${i + 1}:`, {
+            hasAuth: !!cookies?.auth,
+            cookieKeys: cookies ? Object.keys(cookies) : []
+          });
+          
           if (cookies?.auth) {
+            logger.info("Successfully retrieved auth cookie");
             break; // 成功获取到auth cookie，退出重试循环
           }
+          
           // 如果没有获取到auth cookie，等待一会儿再试
           if (i < maxRetries - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            logger.info(`No auth cookie found, retrying in ${retryDelay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         } catch (cookieError) {
           logger.warn(`获取Cookie失败 (尝试 ${i + 1}/${maxRetries}):`, cookieError);
           if (i < maxRetries - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
         }
       }
@@ -272,107 +283,106 @@ const useAuthStore = create<AuthState>((set, get) => ({
       logger.info("Handling OAuth callback:", url);
       const urlObj = new URL(url);
       
+      // 清理OAuth状态
+      set({ isOAuthInProgress: false, oAuthUrl: undefined });
+      
+      // 处理深度链接回调
       if (url.startsWith('oriontv://oauth/callback')) {
         const success = urlObj.searchParams.get('success');
         const error = urlObj.searchParams.get('error');
         
         if (success === 'true') {
-          // OAuth成功后，直接设置登录状态
-          logger.info("OAuth callback via deep link successful, setting login state");
-          
-          set({ 
-            isLoggedIn: true,
-            isOAuthInProgress: false, 
-            isLoginModalVisible: false,
-            oAuthUrl: undefined
-          });
-          
-          // 等待一下让 Cookie 生效，然后检查登录状态获取用户信息
-          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-          try {
-            // 延迟检查登录状态，给 Cookie 时间生效
-            setTimeout(async () => {
-              try {
-                await get().checkLoginStatus(apiBaseUrl);
-                logger.info("Login status check completed after OAuth callback");
-              } catch (error) {
-                logger.warn("Failed to check login status after OAuth callback:", error);
-                // 即使检查失败，保持登录状态
-              }
-            }, 1000); // 等待1秒
-          } catch (error) {
-            logger.warn("Failed to set timeout for login status check:", error);
-          }
-          
-          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-          return true;
+          logger.info("OAuth deep link callback successful");
+          return await get()._handleSuccessfulOAuth();
         }
         
         if (error) {
           Toast.show({ type: "error", text1: "授权失败", text2: decodeURIComponent(error) });
-          set({ isOAuthInProgress: false });
           return false;
         }
       }
       
+      // 处理标准OAuth回调参数
       const code = urlObj.searchParams.get('code');
       const state = urlObj.searchParams.get('state');
       const error = urlObj.searchParams.get('error');
       
       if (error) {
         Toast.show({ type: "error", text1: "授权失败", text2: "用户取消授权或授权被拒绝" });
-        set({ isOAuthInProgress: false });
         return false;
       }
       
       if (!code || !state) {
         Toast.show({ type: "error", text1: "授权参数错误", text2: "授权回调参数缺失" });
-        set({ isOAuthInProgress: false });
         return false;
       }
       
+      // 处理服务器OAuth回调
       const result = await api.handleOAuthCallback(code, state);
       if (result.ok) {
-        // OAuth成功后，强制设置登录状态并获取用户信息
-        logger.info("OAuth callback successful, setting login state");
-        
-        // 先设置登录状态为true
-        set({ 
-          isLoggedIn: true, 
-          isOAuthInProgress: false, 
-          isLoginModalVisible: false,
-          oAuthUrl: undefined
-        });
-        
-        // 延迟检查登录状态并获取用户信息，给 Cookie 时间生效
-        const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-        setTimeout(async () => {
-          try {
-            await get().checkLoginStatus(apiBaseUrl);
-            logger.info("Login status check completed after standard OAuth callback");
-          } catch (error) {
-            logger.warn("Failed to check login status after OAuth, but keeping login state:", error);
-            // 即使检查失败，也保持登录状态，因为OAuth已经成功
-          }
-        }, 1000); // 等待1秒
-        
-        Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-        return true;
+        logger.info("OAuth server callback successful");
+        return await get()._handleSuccessfulOAuth();
       } else {
         Toast.show({ 
           type: "error", 
           text1: "授权处理失败", 
           text2: result.error || "服务器处理授权信息时出错" 
         });
-        set({ isOAuthInProgress: false });
         return false;
       }
     } catch (error) {
       logger.error("Failed to handle OAuth callback:", error);
       Toast.show({ type: "error", text1: "授权回调处理失败", text2: "网络错误或服务器异常" });
-      set({ isOAuthInProgress: false });
       return false;
     }
+  },
+  
+  _handleSuccessfulOAuth: async (): Promise<boolean> => {
+    // 设置登录状态
+    set({ 
+      isLoggedIn: true, 
+      isOAuthInProgress: false, 
+      isLoginModalVisible: false,
+      oAuthUrl: undefined
+    });
+    
+    // 使用Promise包装延迟检查，避免竞态条件
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        try {
+          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+          // 等待Cookie生效后刷新登录状态
+          await get()._waitForCookieAndRefreshStatus(apiBaseUrl);
+          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+          resolve(true);
+        } catch (error) {
+          logger.warn("Failed to refresh login status after OAuth, but keeping login state:", error);
+          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+          resolve(true); // 即使检查失败，也认为OAuth成功
+        }
+      }, 1500); // 增加等待时间确保Cookie生效
+    });
+  },
+  
+  _waitForCookieAndRefreshStatus: async (apiBaseUrl: string): Promise<void> => {
+    // 多次尝试检查Cookie状态，直到成功或超时
+    const maxAttempts = 5;
+    const intervalMs = 800;
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await get().checkLoginStatus(apiBaseUrl);
+        logger.info(`Login status refresh successful on attempt ${attempt}`);
+        return;
+      } catch (error) {
+        logger.warn(`Login status check failed on attempt ${attempt}:`, error);
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, intervalMs));
+        }
+      }
+    }
+    
+    throw new Error("Failed to refresh login status after multiple attempts");
   },
   
   clearOAuthUrl: () => set({ oAuthUrl: undefined, isOAuthInProgress: false }),

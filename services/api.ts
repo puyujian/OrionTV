@@ -180,39 +180,65 @@ export class API {
         method: "GET",
         headers: {
           'X-Mobile-App': 'true',
-          'User-Agent': 'OrionTV/1.0 Mobile'
+          'User-Agent': 'OrionTV/1.0 Mobile',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
         },
         credentials: 'include', // 确保接收cookies
-        redirect: "follow" // 允许跟随重定向以处理cookies
+        redirect: "manual" // 手动处理重定向以确保cookies被正确设置
       });
       
-      // 检查响应状态
-      if (response.ok || response.status === 302 || response.status === 301) {
-        // 成功后需要确保cookies被设置
-        // 检查是否有Set-Cookie头
-        const setCookieHeader = response.headers.get('set-cookie');
-        if (setCookieHeader) {
-          console.log('OAuth回调成功，接收到cookies:', setCookieHeader);
-        }
+      // 记录详细的响应信息用于调试
+      const responseHeaders = Array.from(response.headers.entries());
+      console.log('OAuth callback response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: responseHeaders.reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {})
+      });
+      
+      // 检查Set-Cookie头
+      const setCookieHeader = response.headers.get('set-cookie');
+      if (setCookieHeader) {
+        console.log('OAuth回调接收到cookies:', setCookieHeader);
+      } else {
+        console.warn('OAuth回调未接收到cookies');
+      }
+      
+      // 处理不同的响应状态
+      if (response.ok) {
+        // 200 OK - 直接返回成功
+        return { ok: true };
+      }
+      
+      if (response.status === 302 || response.status === 301) {
+        // 重定向处理
+        const location = response.headers.get('location');
+        console.log('OAuth callback redirect location:', location);
         
-        // 检查重定向location
-        const location = response.headers.get('Location');
         if (location?.includes('error=')) {
           const errorMatch = location.match(/error=([^&]+)/);
           const error = errorMatch ? decodeURIComponent(errorMatch[1]) : '授权失败';
           return { ok: false, error };
         }
         
+        // 重定向成功，认为OAuth成功
         return { ok: true };
       }
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        return { ok: false, error: `回调处理失败: ${errorText}` };
+      // 其他错误状态
+      let errorText = `HTTP ${response.status}`;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          errorText = responseText;
+        }
+      } catch (parseError) {
+        console.warn('Failed to parse error response:', parseError);
       }
       
-      return { ok: true };
+      return { ok: false, error: `回调处理失败: ${errorText}` };
     } catch (error) {
+      console.error('OAuth callback network error:', error);
       if (error instanceof Error) {
         return { ok: false, error: error.message };
       }
