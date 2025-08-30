@@ -79,27 +79,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
       
-      // 多次尝试获取Cookie，有时候需要一点时间来生效
-      let cookies = null;
-      const maxRetries = 3;
-      
-      for (let i = 0; i < maxRetries; i++) {
-        try {
-          cookies = await Cookies.get(api.baseURL);
-          if (cookies?.auth) {
-            break; // 成功获取到auth cookie，退出重试循环
-          }
-          // 如果没有获取到auth cookie，等待一会儿再试
-          if (i < maxRetries - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } catch (cookieError) {
-          logger.warn(`获取Cookie失败 (尝试 ${i + 1}/${maxRetries}):`, cookieError);
-          if (i < maxRetries - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
-      }
+      // 获取Cookie检查登录状态
+      const cookies = await Cookies.get(api.baseURL);
       
       if (serverConfig && serverConfig.StorageType === "localstorage" && !cookies?.auth) {
         const loginResult = await api.login().catch(() => {
@@ -277,8 +258,8 @@ const useAuthStore = create<AuthState>((set, get) => ({
         const error = urlObj.searchParams.get('error');
         
         if (success === 'true') {
-          // OAuth成功后，直接设置登录状态
-          logger.info("OAuth callback via deep link successful, setting login state");
+          // OAuth成功后，直接设置登录状态并重新检查状态
+          logger.info("OAuth callback via deep link successful");
           
           set({ 
             isLoggedIn: true,
@@ -287,21 +268,10 @@ const useAuthStore = create<AuthState>((set, get) => ({
             oAuthUrl: undefined
           });
           
-          // 等待一下让 Cookie 生效，然后检查登录状态获取用户信息
+          // 立即重新检查登录状态以获取用户信息
           const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-          try {
-            // 延迟检查登录状态，给 Cookie 时间生效
-            setTimeout(async () => {
-              try {
-                await get().checkLoginStatus(apiBaseUrl);
-                logger.info("Login status check completed after OAuth callback");
-              } catch (error) {
-                logger.warn("Failed to check login status after OAuth callback:", error);
-                // 即使检查失败，保持登录状态
-              }
-            }, 1000); // 等待1秒
-          } catch (error) {
-            logger.warn("Failed to set timeout for login status check:", error);
+          if (apiBaseUrl) {
+            get().checkLoginStatus(apiBaseUrl);
           }
           
           Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
@@ -333,10 +303,9 @@ const useAuthStore = create<AuthState>((set, get) => ({
       
       const result = await api.handleOAuthCallback(code, state);
       if (result.ok) {
-        // OAuth成功后，强制设置登录状态并获取用户信息
-        logger.info("OAuth callback successful, setting login state");
+        // OAuth成功后，直接设置登录状态并重新检查状态
+        logger.info("OAuth callback successful");
         
-        // 先设置登录状态为true
         set({ 
           isLoggedIn: true, 
           isOAuthInProgress: false, 
@@ -344,17 +313,11 @@ const useAuthStore = create<AuthState>((set, get) => ({
           oAuthUrl: undefined
         });
         
-        // 延迟检查登录状态并获取用户信息，给 Cookie 时间生效
+        // 立即重新检查登录状态以获取用户信息
         const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-        setTimeout(async () => {
-          try {
-            await get().checkLoginStatus(apiBaseUrl);
-            logger.info("Login status check completed after standard OAuth callback");
-          } catch (error) {
-            logger.warn("Failed to check login status after OAuth, but keeping login state:", error);
-            // 即使检查失败，也保持登录状态，因为OAuth已经成功
-          }
-        }, 1000); // 等待1秒
+        if (apiBaseUrl) {
+          get().checkLoginStatus(apiBaseUrl);
+        }
         
         Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
         return true;

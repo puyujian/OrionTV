@@ -105,7 +105,13 @@ export class API {
       throw new Error("API_URL_NOT_SET");
     }
 
-    const response = await fetch(`${this.baseURL}${url}`, options);
+    // 确保所有请求都包含 credentials 以支持 Cookie
+    const defaultOptions: RequestInit = {
+      credentials: 'include',
+      ...options,
+    };
+
+    const response = await fetch(`${this.baseURL}${url}`, defaultOptions);
 
     if (response.status === 401) {
       throw new Error("UNAUTHORIZED");
@@ -139,6 +145,7 @@ export class API {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password }),
+            credentials: 'include',
           });
           
           if (response.status === 401) {
@@ -352,6 +359,7 @@ export class API {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password, confirmPassword: confirmPassword || password }),
+            credentials: 'include',
           });
           
           if (!response.ok) {
