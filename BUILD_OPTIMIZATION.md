@@ -19,7 +19,7 @@
 - ✅ **Node.js 依赖缓存**: 自动缓存 yarn.lock
 - ✅ **Gradle 构建缓存**: 缓存 Gradle 依赖和构建产物
 - ✅ **Expo Prebuild 缓存**: 缓存预构建的 Android/iOS 项目
-- ✅ **配置缓存**: 使用 Gradle 配置缓存加速构建
+- ⚠️ **配置缓存**: 暂时禁用（React Native 兼容性问题）
 
 #### 2. 并行构建
 - ✅ **Gradle 并行任务**: `--parallel` 参数
@@ -35,25 +35,36 @@
 - ✅ **智能 Prebuild**: 检查缓存避免重复 prebuild
 - ✅ **Gradle Daemon**: 保持 Gradle 进程运行
 - ✅ **增量构建**: TypeScript 增量编译
+- ⚠️ **配置缓存**: 因 React Native 外部进程调用而禁用
+
+### 已知限制
+
+**Gradle 配置缓存问题**:
+React Native 和 Expo 在构建过程中会调用外部 Node.js 进程，这与 Gradle 8.8+ 的配置缓存功能不兼容。因此我们暂时禁用了配置缓存功能，但保留了其他所有优化。
+
+相关错误：
+```
+Starting an external process 'node --print require.resolve(...)' during configuration time is unsupported.
+```
 
 ### 预期性能提升
 
 | 优化项目 | 预期提升 | 说明 |
 |---------|---------|------|
 | 依赖缓存 | 2-5分钟 | 跳过重复下载 |
-| Gradle 缓存 | 3-8分钟 | 重用编译产物 |
+| Gradle 缓存 | 3-6分钟 | 重用编译产物 |
 | Prebuild 缓存 | 1-3分钟 | 跳过项目生成 |
-| 并行构建 | 30-50% | 多核心利用 |
-| **总计** | **40-60%** | **整体构建时间** |
+| 并行构建 | 30-40% | 多核心利用 |
+| **总计** | **30-50%** | **整体构建时间** |
 
 ### 本地开发优化
 
-新增的快速构建命令：
+推荐的快速构建命令：
 
 ```bash
 # 快速构建（跳过清理）
-yarn build-fast
-yarn build-debug-fast
+yarn build-fast          # 生产版本
+yarn build-debug-fast    # 调试版本
 
 # 快速 prebuild（不清理）
 yarn prebuild-fast
@@ -75,11 +86,28 @@ yarn test-ci
 ### 故障排除
 
 如果构建失败：
-1. 先尝试清理缓存: `yarn clean`
-2. 重新安装依赖: `yarn clean-modules`
-3. 使用标准构建命令而非快速版本
-4. 检查 Android Gradle 版本兼容性
+
+1. **配置缓存错误**: 
+   ```bash
+   # 已在 workflow 中自动禁用，无需手动处理
+   ```
+
+2. **其他构建错误**:
+   ```bash
+   yarn clean              # 清理缓存
+   yarn clean-modules      # 重新安装依赖
+   ```
+
+3. **Gradle 版本问题**:
+   - 检查 `android/gradle/wrapper/gradle-wrapper.properties`
+   - 确保使用兼容的 Gradle 版本
+
+### 未来改进计划
+
+1. **等待 React Native 支持**: 配置缓存功能将在 React Native 解决外部进程调用问题后重新启用
+2. **更多缓存策略**: 研究其他可缓存的构建步骤
+3. **构建优化**: 持续优化 Gradle 配置和构建脚本
 
 ---
 
-这些优化应该能显著减少构建时间，特别是重复构建时的效果更明显。
+这些优化在保持兼容性的同时显著提升了构建速度，特别是重复构建的效果更明显。

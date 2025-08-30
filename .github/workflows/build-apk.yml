@@ -95,10 +95,22 @@ jobs:
           # 检查是否有缓存的 prebuild 结果
           if [ -d "android" ] && [ -f "android/settings.gradle" ]; then
             echo "Using cached prebuild results"
+            # 更新配置文件
+            yarn copy-config
           else
             echo "Running prebuild..."
             yarn prebuild
           fi
+
+      - name: Verify bundle generation
+        run: |
+          # 确保 Metro 配置正确
+          echo "Checking Metro configuration..."
+          node -e "console.log('Metro config:', require('./metro.config.js'))"
+          
+          # 验证入口文件存在
+          echo "Checking entry file..."
+          EXPO_TV=1 node -e "require('expo/scripts/resolveAppEntry')" . android absolute
 
       - name: Setup Gradle daemon and parallel builds
         run: |
