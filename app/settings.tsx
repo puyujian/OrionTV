@@ -20,6 +20,7 @@ import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
 import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
 import ResponsiveHeader from "@/components/navigation/ResponsiveHeader";
 import { DeviceUtils } from "@/utils/DeviceUtils";
+import { OAuthDebugger } from "@/utils/OAuthDebugger";
 
 export default function SettingsScreen() {
   const { loadSettings, saveSettings, setApiBaseUrl, setM3uUrl } = useSettingsStore();
@@ -83,6 +84,26 @@ export default function SettingsScreen() {
 
   const markAsChanged = () => {
     setHasChanges(true);
+  };
+
+  // OAuth 调试函数
+  const handleOAuthDebug = async () => {
+    try {
+      const report = await OAuthDebugger.diagnose();
+      Alert.alert("OAuth 诊断报告", report, [
+        { text: "复制报告", onPress: () => {
+          // 在实际应用中可以使用 Clipboard.setString(report)
+          console.log("OAuth 诊断报告:", report);
+        }},
+        { text: "清除登录数据", onPress: async () => {
+          await OAuthDebugger.clearLoginData();
+          Toast.show({ type: "info", text1: "已清除登录数据" });
+        }},
+        { text: "关闭" }
+      ]);
+    } catch (error) {
+      Alert.alert("调试失败", String(error));
+    }
   };
 
   const sections = [
@@ -201,6 +222,16 @@ export default function SettingsScreen() {
             disabled={!hasChanges || isLoading}
             style={[dynamicStyles.saveButton, (!hasChanges || isLoading) && dynamicStyles.disabledButton]}
           />
+          
+          {/* OAuth 调试按钮 - 在开发版本或启用调试工具时显示 */}
+          {(__DEV__ || process.env.EXPO_PUBLIC_ENABLE_DEBUG_TOOLS === 'true') && (
+            <StyledButton
+              text="OAuth 登录调试"
+              onPress={handleOAuthDebug}
+              variant="secondary"
+              style={[dynamicStyles.saveButton, { marginTop: spacing.sm }]}
+            />
+          )}
         </View>
       </ThemedView>
     </KeyboardAvoidingView>

@@ -2,6 +2,20 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - release
+        - debug
+      enable_debug_tools:
+        description: '启用调试工具 (在生产版本中)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -12,16 +26,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js with cache
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: "yarn"
+          cache-dependency-path: yarn.lock
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+      - name: Setup Java with cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache Expo prebuild
+        uses: actions/cache@v4
+        with:
+          path: |
+            android
+            ios
+          key: expo-prebuild-${{ runner.os }}-${{ hashFiles('app.json', 'package.json') }}
+          restore-keys: |
+            expo-prebuild-${{ runner.os }}-
+
+      - name: Install dependencies (with cache optimization)
+        run: |
+          # 使用并行安装和跳过可选依赖来加速
+          yarn install --frozen-lockfile --prefer-offline --network-timeout 300000
 
       - name: Get version from package.json
         id: package-version
@@ -33,25 +77,53 @@ jobs:
           distribution: "zulu"
           java-version: "17"
 
+      - name: Set build environment
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
+            echo "BUILD_TYPE=debug" >> $GITHUB_ENV
+            echo "APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk" >> $GITHUB_ENV
+            echo "APK_SUFFIX=debug" >> $GITHUB_ENV
+          else
+            echo "BUILD_TYPE=release" >> $GITHUB_ENV
+            echo "APK_PATH=android/app/build/outputs/apk/release/app-release.apk" >> $GITHUB_ENV
+            echo "APK_SUFFIX=release" >> $GITHUB_ENV
+          fi
+
+      - name: Enable debug tools (if requested)
+        if: github.event.inputs.enable_debug_tools == 'true'
+        run: |
+          # 设置环境变量启用调试工具
+          echo "EXPO_PUBLIC_ENABLE_DEBUG_TOOLS=true" >> .env.local
+          echo "Debug tools will be enabled in this build"
+
       - name: Prebuild TV App
         run: yarn prebuild
 
       - name: Build TV APK
-        run: yarn build
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
+            yarn build-debug
+          else
+            yarn build
+          fi
 
       - name: Rename APK file
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/release/app-release.apk artifacts/orionTV.${{ steps.package-version.outputs.version }}.apk
+          cp ${{ env.APK_PATH }} artifacts/orionTV.${{ steps.package-version.outputs.version }}.${{ env.APK_SUFFIX }}.apk
 
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.package-version.outputs.version }}
-          name: Release v${{ steps.package-version.outputs.version }}
-          body: Automated release for version v${{ steps.package-version.outputs.version }}.
+          tag_name: v${{ steps.package-version.outputs.version }}-${{ env.APK_SUFFIX }}
+          name: Release v${{ steps.package-version.outputs.version }} (${{ env.BUILD_TYPE }})
+          body: |
+            Automated ${{ env.BUILD_TYPE }} build for version v${{ steps.package-version.outputs.version }}.
+            
+            构建类型: ${{ github.event.inputs.build_type }}
+            ${{ github.event.inputs.enable_debug_tools == 'true' && '🛠️ 调试工具已启用' || '' }}
           draft: false
-          prerelease: false
-          files: artifacts/orionTV.${{ steps.package-version.outputs.version }}.apk
+          prerelease: ${{ github.event.inputs.build_type == 'debug' }}
+          files: artifacts/orionTV.${{ steps.package-version.outputs.version }}.${{ env.APK_SUFFIX }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

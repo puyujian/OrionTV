@@ -271,7 +271,15 @@ const useAuthStore = create<AuthState>((set, get) => ({
           // 立即重新检查登录状态以获取用户信息
           const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
           if (apiBaseUrl) {
-            get().checkLoginStatus(apiBaseUrl);
+            // 使用 setTimeout 确保状态更新完成后再检查
+            setTimeout(async () => {
+              try {
+                await get().checkLoginStatus(apiBaseUrl);
+                logger.info("Login status recheck completed after OAuth callback");
+              } catch (error) {
+                logger.warn("Failed to recheck login status after OAuth callback:", error);
+              }
+            }, 100);
           }
           
           Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
@@ -316,7 +324,15 @@ const useAuthStore = create<AuthState>((set, get) => ({
         // 立即重新检查登录状态以获取用户信息
         const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
         if (apiBaseUrl) {
-          get().checkLoginStatus(apiBaseUrl);
+          // 使用 setTimeout 确保状态更新完成后再检查
+          setTimeout(async () => {
+            try {
+              await get().checkLoginStatus(apiBaseUrl);
+              logger.info("Login status recheck completed after standard OAuth callback");
+            } catch (error) {
+              logger.warn("Failed to recheck login status after standard OAuth callback:", error);
+            }
+          }, 100);
         }
         
         Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
