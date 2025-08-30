@@ -105,7 +105,13 @@ export class API {
       throw new Error("API_URL_NOT_SET");
     }
 
-    const response = await fetch(`${this.baseURL}${url}`, options);
+    // 确保所有API调用都携带Cookie
+    const fetchOptions: RequestInit = {
+      credentials: 'include',
+      ...options
+    };
+
+    const response = await fetch(`${this.baseURL}${url}`, fetchOptions);
 
     if (response.status === 401) {
       throw new Error("UNAUTHORIZED");
