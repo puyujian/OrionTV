@@ -71,12 +71,6 @@ jobs:
         id: package-version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Setup JDK
-        uses: actions/setup-java@v3
-        with:
-          distribution: "zulu"
-          java-version: "17"
-
       - name: Set build environment
         run: |
           if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
@@ -96,15 +90,32 @@ jobs:
           echo "EXPO_PUBLIC_ENABLE_DEBUG_TOOLS=true" >> .env.local
           echo "Debug tools will be enabled in this build"
 
-      - name: Prebuild TV App
-        run: yarn prebuild
+      - name: Prebuild TV App (with cache check)
+        run: |
+          # 检查是否有缓存的 prebuild 结果
+          if [ -d "android" ] && [ -f "android/settings.gradle" ]; then
+            echo "Using cached prebuild results"
+          else
+            echo "Running prebuild..."
+            yarn prebuild
+          fi
 
-      - name: Build TV APK
+      - name: Setup Gradle daemon and parallel builds
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.daemon=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.parallel=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.configureondemand=true" >> ~/.gradle/gradle.properties
+          echo "org.gradle.caching=true" >> ~/.gradle/gradle.properties
+          echo "android.useAndroidX=true" >> ~/.gradle/gradle.properties
+          echo "android.enableJetifier=true" >> ~/.gradle/gradle.properties
+
+      - name: Build TV APK (optimized)
         run: |
           if [ "${{ github.event.inputs.build_type }}" = "debug" ]; then
-            yarn build-debug
+            yarn build-debug-fast
           else
-            yarn build
+            yarn build-fast
           fi
 
       - name: Rename APK file
@@ -122,6 +133,12 @@ jobs:
             
             构建类型: ${{ github.event.inputs.build_type }}
             ${{ github.event.inputs.enable_debug_tools == 'true' && '🛠️ 调试工具已启用' || '' }}
+            
+            ## 优化说明
+            - ✅ 使用 Node.js 20 和并行构建
+            - ✅ Gradle 缓存和配置缓存
+            - ✅ Expo prebuild 缓存
+            - ✅ 并行 Gradle 任务
           draft: false
           prerelease: ${{ github.event.inputs.build_type == 'debug' }}
           files: artifacts/orionTV.${{ steps.package-version.outputs.version }}.${{ env.APK_SUFFIX }}.apk
