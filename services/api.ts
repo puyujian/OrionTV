@@ -166,128 +166,81 @@ export class API {
     try {
       console.log('=== LinuxDo OAuth Debug Log Start ===');
       console.log('Starting LinuxDo OAuth request to:', `${this.baseURL}/api/oauth/authorize`);
-      console.log('Request method: GET, redirect: manual');
-      
-      const requestHeaders = {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-Mobile-App': 'true',
-        'User-Agent': 'OrionTV/1.0 Mobile'
-      };
-      console.log('Request headers:', requestHeaders);
       
       const response = await fetch(`${this.baseURL}/api/oauth/authorize`, {
         method: "GET",
-        redirect: "manual", // 关键：阻止自动跟踪重定向，手动处理第一次响应
-        headers: requestHeaders
+        redirect: "manual", // 关键修复：阻止自动跟随重定向
+        headers: {
+          'X-Mobile-App': 'true',
+          'User-Agent': 'OrionTV/1.0 Mobile'
+        }
       });
       
-      console.log('=== First Response Received ===');
-      console.log('Response status:', response.status);
-      console.log('Response type:', response.type);
-      console.log('Response redirected:', response.redirected);
-      console.log('Response URL:', response.url);
+      console.log('=== Response Details ===');
+      console.log('Status:', response.status);
+      console.log('Status Text:', response.statusText);
+      console.log('Type:', response.type);
+      console.log('URL:', response.url);
+      console.log('Redirected:', response.redirected);
       
-      const allHeaders = Object.fromEntries(response.headers.entries());
-      console.log('All response headers:', allHeaders);
+      // 打印所有响应头
+      const headers: Record<string, string> = {};
+      for (const [key, value] of response.headers.entries()) {
+        headers[key] = value;
+      }
+      console.log('All Headers:', headers);
       
-      // 立即检查Location头 - 这是关键的第一次重定向响应
-      const locationHeader = response.headers.get('Location') || response.headers.get('location');
-      console.log('Location header (case-sensitive):', response.headers.get('Location'));
-      console.log('location header (lowercase):', response.headers.get('location'));
-      console.log('Final locationHeader value:', locationHeader);
+      // 核心修复：立即检查location头（根据抓包，服务器返回小写location）
+      const location = response.headers.get('location');
+      console.log('Found location header:', location);
       
-      // 关键修复：立即处理第一次响应，不论状态码
-      if (locationHeader) {
-        console.log('=== SUCCESS: Found Location header in first response ===');
-        console.log('Authorization URL:', locationHeader);
-        console.log('Returning immediately without following redirects');
-        return locationHeader;
+      if (location) {
+        console.log('=== SUCCESS: Captured OAuth URL from location header ===');
+        console.log('OAuth URL:', location);
+        return location;
       }
       
-      // 优先处理重定向状态码（3xx）- 但此时已经检查过Location头
-      if (response.status >= 300 && response.status < 400) {
-        console.log('=== 3xx Redirect Status Detected ===');
-        console.log('Status code:', response.status);
-        console.warn('Redirect response detected but no Location header found - this is unusual');
-        
-        // 再次尝试不同的头字段名称变体
-        const alternativeHeaders = [
-          'location', 'Location', 'LOCATION',
-          'Redirect', 'redirect', 'REDIRECT'
-        ];
-        
-        for (const headerName of alternativeHeaders) {
-          const headerValue = response.headers.get(headerName);
-          if (headerValue) {
-            console.log(`Found authorization URL in header '${headerName}':`, headerValue);
-            return headerValue;
-          }
-        }
+      // 备用检查大写Location
+      const Location = response.headers.get('Location');
+      console.log('Checking uppercase Location header:', Location);
+      
+      if (Location) {
+        console.log('=== SUCCESS: Captured OAuth URL from Location header ==='); 
+        console.log('OAuth URL:', Location);
+        return Location;
       }
       
-      // 对于2xx状态码，检查是否服务器用其他方式返回URL
-      console.log('=== Checking 2xx Response for Authorization URL ===');
+      // 如果没有找到location头，输出调试信息并抛出错误
+      console.log('=== ERROR: No location header found ===');
+      console.log('This indicates the server response was not as expected');
+      console.log('Expected: location header with OAuth URL');
+      console.log('Got: status', response.status, 'but no location header');
+      
+      // 作为最后的尝试，检查响应体是否包含授权URL
       const contentType = response.headers.get('Content-Type') || '';
       console.log('Content-Type:', contentType);
       
       if (contentType.includes('application/json')) {
         try {
           const data = await response.json();
-          console.log('=== Response Body Data ===');
-          console.log('Raw response data:', JSON.stringify(data, null, 2));
+          console.log('Response body:', data);
           
-          // 检查多种可能的字段名，按优先级排序
-          const possibleFields = [
-            'url', 'authorization_url', 'authorize_url', 'location',
-            'redirect_url', 'auth_url', 'login_url', 'oauth_url'
-          ];
-          
-          for (const field of possibleFields) {
-            if (data[field]) {
-              console.log(`=== SUCCESS: Found authorization URL in field '${field}' ===`);
-              console.log('Authorization URL:', data[field]);
-              return data[field];
-            }
+          const authUrl = data.url || data.authorization_url || data.authorize_url || data.location;
+          if (authUrl) {
+            console.log('Found authorization URL in response body:', authUrl);
+            return authUrl;
           }
-          
-          console.warn('No authorization URL found in any expected response fields');
         } catch (jsonError) {
           console.error('Failed to parse JSON response:', jsonError);
         }
-      } else {
-        // 尝试解析非JSON响应
-        try {
-          const responseText = await response.text();
-          console.log('=== Non-JSON Response Body ===');
-          console.log('Response text (first 500 chars):', responseText.substring(0, 500));
-          
-          // 尝试从HTML或文本中提取URL
-          const urlMatch = responseText.match(/https?:\/\/[^\s<>"']+/);
-          if (urlMatch) {
-            console.log('=== Found URL in response text ===');
-            console.log('Extracted URL:', urlMatch[0]);
-            return urlMatch[0];
-          }
-        } catch (textError) {
-          console.error('Failed to parse response as text:', textError);
-        }
       }
       
-      // 最终错误处理 - 提供完整的调试信息
-      console.error('=== FAILURE: No authorization URL found ===');
-      console.error('Final attempt - dumping all available information:');
-      console.error('Response status:', response.status);
-      console.error('Response statusText:', response.statusText);
-      console.error('Response type:', response.type);
-      console.error('Response redirected:', response.redirected);
-      console.error('Response URL:', response.url);
-      console.error('All headers:', Object.fromEntries(response.headers.entries()));
-      
-      throw new Error(`获取授权链接失败 - 状态码: ${response.status}, 响应类型: ${response.type}`);
+      throw new Error(`未找到授权链接 - 状态码: ${response.status}`);
       
     } catch (error) {
-      console.error('LinuxDo OAuth error:', error);
+      console.error('=== EXCEPTION in startLinuxDoOAuth ===');
+      console.error('Error:', error);
+      console.log('=== LinuxDo OAuth Debug Log End ===');
       
       if (error instanceof Error) {
         throw error;
