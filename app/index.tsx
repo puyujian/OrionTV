@@ -47,6 +47,17 @@ export default function HomeScreen() {
   const { isLoggedIn, logout } = useAuthStore();
   const apiConfigStatus = useApiConfig();
 
+  // 监听登录状态变化，OAuth成功后刷新数据
+  useEffect(() => {
+    if (isLoggedIn && selectedCategory && apiConfigStatus.isConfigured) {
+      // 用户刚刚登录成功，刷新数据
+      setTimeout(() => {
+        fetchInitialData();
+        refreshPlayRecords();
+      }, 100);
+    }
+  }, [isLoggedIn, selectedCategory, apiConfigStatus.isConfigured, fetchInitialData, refreshPlayRecords]);
+
   useFocusEffect(
     useCallback(() => {
       refreshPlayRecords();

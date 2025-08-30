@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { Platform, View, StyleSheet } from "react-native";
@@ -25,6 +25,7 @@ const logger = Logger.withTag('RootLayout');
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const router = useRouter();
   const colorScheme = "dark";
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -79,14 +80,26 @@ export default function RootLayout() {
 
   // Handle OAuth deep links
   useEffect(() => {
-    const handleDeepLink = (event: { url: string }) => {
+    const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
+      logger.info("Received deep link:", url);
+      
       // Check if this is an OAuth callback URL
       if (url.includes('/oauth/callback') || 
           url.includes('code=') || 
           url.includes('state=') ||
           url.startsWith('oriontv://oauth/callback')) {
-        handleOAuthCallback(url);
+        
+        const success = await handleOAuthCallback(url);
+        // OAuth成功后导航到主页
+        if (success) {
+          logger.info("OAuth callback successful, navigating to home");
+          // 使用setTimeout确保状态更新完成后再导航
+          setTimeout(() => {
+            // 使用replace确保用户不能返回到回调页面
+            router.replace('/');
+          }, 500);
+        }
       }
     };
 
@@ -94,19 +107,33 @@ export default function RootLayout() {
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
     // Handle app launch with URL (when app was closed)
-    Linking.getInitialURL().then((url) => {
-      if (url && (url.includes('/oauth/callback') || 
-                  url.includes('code=') || 
-                  url.includes('state=') ||
-                  url.startsWith('oriontv://oauth/callback'))) {
-        handleOAuthCallback(url);
+    Linking.getInitialURL().then(async (url) => {
+      if (url) {
+        logger.info("App launched with URL:", url);
+        
+        if (url.includes('/oauth/callback') || 
+            url.includes('code=') || 
+            url.includes('state=') ||
+            url.startsWith('oriontv://oauth/callback')) {
+          
+          const success = await handleOAuthCallback(url);
+          // OAuth成功后导航到主页
+          if (success) {
+            logger.info("OAuth callback on launch successful, navigating to home");
+            // 使用setTimeout确保状态更新完成后再导航
+            setTimeout(() => {
+              // 使用replace确保用户不能返回到回调页面
+              router.replace('/');
+            }, 500);
+          }
+        }
       }
     });
 
     return () => {
       subscription?.remove();
     };
-  }, [handleOAuthCallback]);
+  }, [handleOAuthCallback, router]);
 
   if (!loaded && !error) {
     return null;
