@@ -168,7 +168,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
       set({ isOAuthInProgress: true });
       logger.info("Starting LinuxDo OAuth process...");
       
-      const authorizeUrl = await api.startLinuxDoOAuth();
+      const authorizeUrl = api.startLinuxDoOAuth();
       logger.info("Got authorize URL from API:", authorizeUrl);
       
       // 验证授权链接格式

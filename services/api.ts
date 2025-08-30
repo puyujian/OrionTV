@@ -162,91 +162,11 @@ export class API {
     }
   }
 
-  async startLinuxDoOAuth(): Promise<string> {
-    try {
-      console.log('=== LinuxDo OAuth Debug Log Start ===');
-      console.log('Starting LinuxDo OAuth request to:', `${this.baseURL}/api/oauth/authorize`);
-      
-      const response = await fetch(`${this.baseURL}/api/oauth/authorize`, {
-        method: "GET",
-        redirect: "manual", // 关键修复：阻止自动跟随重定向
-        headers: {
-          'X-Mobile-App': 'true',
-          'User-Agent': 'OrionTV/1.0 Mobile'
-        }
-      });
-      
-      console.log('=== Response Details ===');
-      console.log('Status:', response.status);
-      console.log('Status Text:', response.statusText);
-      console.log('Type:', response.type);
-      console.log('URL:', response.url);
-      console.log('Redirected:', response.redirected);
-      
-      // 打印所有响应头
-      const headers: Record<string, string> = {};
-      for (const [key, value] of response.headers.entries()) {
-        headers[key] = value;
-      }
-      console.log('All Headers:', headers);
-      
-      // 核心修复：立即检查location头（根据抓包，服务器返回小写location）
-      const location = response.headers.get('location');
-      console.log('Found location header:', location);
-      
-      if (location) {
-        console.log('=== SUCCESS: Captured OAuth URL from location header ===');
-        console.log('OAuth URL:', location);
-        return location;
-      }
-      
-      // 备用检查大写Location
-      const Location = response.headers.get('Location');
-      console.log('Checking uppercase Location header:', Location);
-      
-      if (Location) {
-        console.log('=== SUCCESS: Captured OAuth URL from Location header ==='); 
-        console.log('OAuth URL:', Location);
-        return Location;
-      }
-      
-      // 如果没有找到location头，输出调试信息并抛出错误
-      console.log('=== ERROR: No location header found ===');
-      console.log('This indicates the server response was not as expected');
-      console.log('Expected: location header with OAuth URL');
-      console.log('Got: status', response.status, 'but no location header');
-      
-      // 作为最后的尝试，检查响应体是否包含授权URL
-      const contentType = response.headers.get('Content-Type') || '';
-      console.log('Content-Type:', contentType);
-      
-      if (contentType.includes('application/json')) {
-        try {
-          const data = await response.json();
-          console.log('Response body:', data);
-          
-          const authUrl = data.url || data.authorization_url || data.authorize_url || data.location;
-          if (authUrl) {
-            console.log('Found authorization URL in response body:', authUrl);
-            return authUrl;
-          }
-        } catch (jsonError) {
-          console.error('Failed to parse JSON response:', jsonError);
-        }
-      }
-      
-      throw new Error(`未找到授权链接 - 状态码: ${response.status}`);
-      
-    } catch (error) {
-      console.error('=== EXCEPTION in startLinuxDoOAuth ===');
-      console.error('Error:', error);
-      console.log('=== LinuxDo OAuth Debug Log End ===');
-      
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('OAuth启动失败，请检查网络连接');
-    }
+  startLinuxDoOAuth(): string {
+    // 直接返回授权接口地址，让浏览器处理重定向
+    const authUrl = `${this.baseURL}/api/oauth/authorize`;
+    console.log('LinuxDO OAuth: 直接使用浏览器打开授权地址:', authUrl);
+    return authUrl;
   }
 
   async handleOAuthCallback(code: string, state: string): Promise<{ ok: boolean; error?: string }> {
