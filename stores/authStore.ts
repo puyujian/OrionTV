@@ -254,15 +254,25 @@ const useAuthStore = create<AuthState>((set, get) => ({
         const error = urlObj.searchParams.get('error');
         
         if (success === 'true') {
-          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-          await get().checkLoginStatus(apiBaseUrl);
+          // OAuth成功后，直接设置登录状态
+          logger.info("OAuth callback via deep link successful, setting login state");
           
-          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
           set({ 
+            isLoggedIn: true,
             isOAuthInProgress: false, 
             isLoginModalVisible: false,
             oAuthUrl: undefined
           });
+          
+          // 尝试检查登录状态获取用户信息
+          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+          try {
+            await get().checkLoginStatus(apiBaseUrl);
+          } catch (error) {
+            logger.warn("Failed to check login status after deep link OAuth, but keeping login state:", error);
+          }
+          
+          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
           return true;
         }
         
@@ -291,15 +301,27 @@ const useAuthStore = create<AuthState>((set, get) => ({
       
       const result = await api.handleOAuthCallback(code, state);
       if (result.ok) {
-        const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-        await get().checkLoginStatus(apiBaseUrl);
+        // OAuth成功后，强制设置登录状态并获取用户信息
+        logger.info("OAuth callback successful, setting login state");
         
-        Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+        // 先设置登录状态为true
         set({ 
+          isLoggedIn: true, 
           isOAuthInProgress: false, 
           isLoginModalVisible: false,
           oAuthUrl: undefined
         });
+        
+        // 然后检查登录状态并获取用户信息
+        const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+        try {
+          await get().checkLoginStatus(apiBaseUrl);
+        } catch (error) {
+          logger.warn("Failed to check login status after OAuth, but keeping login state:", error);
+          // 即使检查失败，也保持登录状态，因为OAuth已经成功
+        }
+        
+        Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
         return true;
       } else {
         Toast.show({ 

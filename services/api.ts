@@ -182,20 +182,28 @@ export class API {
           'X-Mobile-App': 'true',
           'User-Agent': 'OrionTV/1.0 Mobile'
         },
-        redirect: "manual"
+        credentials: 'include', // 确保接收cookies
+        redirect: "follow" // 允许跟随重定向以处理cookies
       });
       
-      if (response.status === 302 || response.status === 301) {
-        const location = response.headers.get('Location');
-        if (location?.includes('oriontv://oauth/callback?success=true')) {
-          return { ok: true };
+      // 检查响应状态
+      if (response.ok || response.status === 302 || response.status === 301) {
+        // 成功后需要确保cookies被设置
+        // 检查是否有Set-Cookie头
+        const setCookieHeader = response.headers.get('set-cookie');
+        if (setCookieHeader) {
+          console.log('OAuth回调成功，接收到cookies:', setCookieHeader);
         }
+        
+        // 检查重定向location
+        const location = response.headers.get('Location');
         if (location?.includes('error=')) {
           const errorMatch = location.match(/error=([^&]+)/);
           const error = errorMatch ? decodeURIComponent(errorMatch[1]) : '授权失败';
           return { ok: false, error };
         }
-        return { ok: true }; // 其他重定向也认为是成功
+        
+        return { ok: true };
       }
       
       if (!response.ok) {
