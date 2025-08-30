@@ -15,7 +15,14 @@
       "Bash(yarn test-ci:*)",
       "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\callback/**)",
       "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\callback/**)",
-      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\authorize/**)"
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\authorize/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\lib/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\authorize/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\callback/**)"
     ],
     "deny": []
   }
