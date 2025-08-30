@@ -164,7 +164,8 @@ export class API {
 
   startLinuxDoOAuth(): string {
     // 直接返回授权接口地址，让浏览器处理重定向
-    const authUrl = `${this.baseURL}/api/oauth/authorize`;
+    // 添加mobile=1参数确保后端能识别移动应用请求
+    const authUrl = `${this.baseURL}/api/oauth/authorize?mobile=1`;
     console.log('LinuxDO OAuth: 直接使用浏览器打开授权地址:', authUrl);
     return authUrl;
   }
