@@ -135,11 +135,8 @@ export default function RootLayout() {
             throw new Error('返回数据格式错误');
           }
 
-          logger.info("Token exchange successful, setting cookie");
+          logger.info("Token exchange successful, cookie should be set automatically");
 
-          // 设置cookie
-          await Cookies.set(apiBaseUrl, 'auth', result.cookie);
-          
           // 使用AuthStore的状态管理方法
           const authStore = useAuthStore.getState();
           
@@ -152,7 +149,7 @@ export default function RootLayout() {
           // 等待一小段时间确保cookie生效
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // 重新检查登录状态
+          // 调用checkLoginStatus验证cookie是否设置成功
           await authStore.checkLoginStatus(apiBaseUrl);
           
           // 检查登录状态并设置
@@ -170,9 +167,9 @@ export default function RootLayout() {
             }, 500);
             return true;
           } else {
-            // 强制设置为登录状态
+            // 即使checkLoginStatus返回false，也认为OAuth成功，强制设置登录状态
             authStore.set({ 
-              isLoggedIn: true, 
+              isLoggedIn: true,
               isLoginModalVisible: false
             });
             Toast.show({ 
