@@ -82,15 +82,27 @@ export default function RootLayout() {
     logger.info(`Processing OAuth ${isLaunch ? 'launch' : 'deep'} link:`, url);
     
     try {
+      // 立即导航到主页避免显示错误页面
+      router.replace('/');
+      
       // 委托给authStore处理OAuth回调
       const authStore = useAuthStore.getState();
       const success = await authStore.handleOAuthCallback(url);
       
       if (success) {
-        // OAuth成功，导航到主页
-        setTimeout(() => {
-          router.replace('/');
-        }, 500);
+        logger.info("OAuth处理成功，已导航到主页");
+        Toast.show({ 
+          type: "success", 
+          text1: "登录成功", 
+          text2: "LinuxDo OAuth授权完成" 
+        });
+      } else {
+        logger.warn("OAuth处理失败");
+        Toast.show({ 
+          type: "error", 
+          text1: "登录失败", 
+          text2: "OAuth授权处理失败，请重试" 
+        });
       }
       
       return success;
@@ -107,20 +119,47 @@ export default function RootLayout() {
 
   // Handle OAuth deep links
   useEffect(() => {
+    // 更精确的OAuth回调URL检测函数
+    const isOAuthCallback = (url: string): boolean => {
+      try {
+        const urlObj = new URL(url);
+        // 检查是否是OrionTV scheme的OAuth回调
+        if (url.startsWith('oriontv://oauth/callback')) {
+          return true;
+        }
+        // 检查是否包含OAuth相关参数
+        const hasOAuthParams = urlObj.searchParams.has('code') || 
+                              urlObj.searchParams.has('state') ||
+                              urlObj.searchParams.has('success') ||
+                              urlObj.searchParams.has('token') ||
+                              urlObj.searchParams.has('error');
+        
+        // 检查路径是否包含oauth/callback
+        const hasOAuthPath = urlObj.pathname.includes('/oauth/callback');
+        
+        return hasOAuthParams || hasOAuthPath;
+      } catch (error) {
+        logger.warn("Failed to parse URL for OAuth detection:", error);
+        // 作为备选方案，使用简单的字符串匹配
+        return url.includes('oauth') && 
+               (url.includes('callback') || 
+                url.includes('code=') || 
+                url.includes('success=') || 
+                url.includes('token=') ||
+                url.includes('error='));
+      }
+    };
+
     const handleDeepLink = async (event: { url: string }) => {
       const url = event.url;
       logger.info("Received deep link:", url);
       
       // 检查是否是OAuth回调URL
-      if (url.startsWith('oriontv://oauth/callback') || 
-          url.includes('/oauth/callback') || 
-          url.includes('code=') || 
-          url.includes('state=') ||
-          url.includes('success=') ||
-          url.includes('token=')) {
-        
-        logger.info("Processing OAuth callback deep link");
+      if (isOAuthCallback(url)) {
+        logger.info("Detected OAuth callback deep link");
         await handleOAuthDeepLink(url, false);
+      } else {
+        logger.info("Non-OAuth deep link received, ignoring");
       }
     };
 
@@ -132,15 +171,12 @@ export default function RootLayout() {
       if (url) {
         logger.info("App launched with URL:", url);
         
-        if (url.startsWith('oriontv://oauth/callback') || 
-            url.includes('/oauth/callback') || 
-            url.includes('code=') || 
-            url.includes('state=') ||
-            url.includes('success=') ||
-            url.includes('token=')) {
-          
-          logger.info("Processing OAuth callback on app launch");
-          await handleOAuthDeepLink(url, true);
+        if (isOAuthCallback(url)) {
+          logger.info("Detected OAuth callback on app launch");
+          // 给应用一些时间完成初始化
+          setTimeout(async () => {
+            await handleOAuthDeepLink(url, true);
+          }, 1000);
         }
       }
     }).catch(error => {
