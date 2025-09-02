@@ -47,16 +47,21 @@ const useAuthStore = create<AuthState>((set, get) => ({
   hideRegisterModal: () => set({ isRegisterModalVisible: false }),
   checkLoginStatus: async (apiBaseUrl?: string) => {
     if (!apiBaseUrl) {
+      logger.warn("checkLoginStatus called without apiBaseUrl");
       set({ isLoggedIn: false, isLoginModalVisible: false });
       return;
     }
+    
     try {
+      logger.info("Checking login status with API base URL:", apiBaseUrl);
+      
       // Wait for server config to be loaded if it's currently loading
       const settingsState = useSettingsStore.getState();
       let serverConfig = settingsState.serverConfig;
       
       // If server config is loading, wait a bit for it to complete
       if (settingsState.isLoadingServerConfig) {
+        logger.info("Waiting for server config to load...");
         // Wait up to 3 seconds for server config to load
         const maxWaitTime = 3000;
         const checkInterval = 100;
@@ -76,6 +81,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
       if (!serverConfig?.StorageType) {
         // Only show error if we're not loading and have tried to fetch the config
         if (!settingsState.isLoadingServerConfig) {
+          logger.warn("No server config available for storage type");
           Toast.show({ type: "error", text1: "请检查网络或者服务器地址是否可用" });
         }
         return;
@@ -83,15 +89,16 @@ const useAuthStore = create<AuthState>((set, get) => ({
       
       // 优化Cookie获取逻辑，增加重试机制和更好的错误处理
       let cookies = null;
-      const maxRetries = 5; // 增加重试次数
-      const retryDelay = 800; // 增加重试间隔
+      const maxRetries = 6; // 增加重试次数
+      const retryDelay = 1000; // 增加重试间隔
       
       for (let i = 0; i < maxRetries; i++) {
         try {
-          cookies = await Cookies.get(api.baseURL);
+          cookies = await Cookies.get(apiBaseUrl);
           logger.info(`Cookie retrieval attempt ${i + 1}:`, {
             hasAuth: !!cookies?.auth,
-            cookieKeys: cookies ? Object.keys(cookies) : []
+            cookieKeys: cookies ? Object.keys(cookies) : [],
+            allCookies: cookies
           });
           
           if (cookies?.auth) {
@@ -112,19 +119,43 @@ const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
       
-      if (serverConfig && serverConfig.StorageType === "localstorage" && !cookies?.auth) {
-        const loginResult = await api.login().catch(() => {
-          set({ isLoggedIn: false, isLoginModalVisible: true });
-        });
-        if (loginResult && loginResult.ok) {
+      if (serverConfig && serverConfig.StorageType === "localstorage") {
+        logger.info("Using localStorage storage type, attempting auto login");
+        if (!cookies?.auth) {
+          const loginResult = await api.login().catch((error) => {
+            logger.error("Auto login failed:", error);
+            set({ isLoggedIn: false, isLoginModalVisible: true });
+          });
+          if (loginResult && loginResult.ok) {
+            logger.info("Auto login successful");
+            set({ isLoggedIn: true });
+          }
+        } else {
+          logger.info("Auth cookie found for localStorage, setting logged in");
           set({ isLoggedIn: true });
         }
       } else {
         const isLoggedIn = !!(cookies && cookies.auth);
-        logger.info("Login status check result:", { hasAuth: isLoggedIn });
+        logger.info("Login status check result:", { 
+          hasAuth: isLoggedIn, 
+          storageType: serverConfig.StorageType,
+          hasCookies: !!cookies 
+        });
+        
+        // 更新登录状态
+        const currentState = get();
+        const wasLoggedIn = currentState.isLoggedIn;
         set({ isLoggedIn });
-        if (!isLoggedIn) {
+        
+        // 如果之前已登录但现在未登录，显示登录模态框
+        if (wasLoggedIn && !isLoggedIn) {
+          logger.info("User logged out, showing login modal");
           set({ isLoginModalVisible: true });
+        } else if (!isLoggedIn) {
+          // 只有在明确需要登录时才显示模态框
+          if (!currentState.isLoginModalVisible) {
+            set({ isLoginModalVisible: true });
+          }
         }
       }
     } catch (error) {
@@ -286,43 +317,50 @@ const useAuthStore = create<AuthState>((set, get) => ({
       // 清理OAuth状态
       set({ isOAuthInProgress: false, oAuthUrl: undefined });
       
-      // 处理深度链接回调
+      // 检查错误参数
+      const error = urlObj.searchParams.get('error');
+      if (error) {
+        const errorMessage = decodeURIComponent(error);
+        logger.error("OAuth callback error:", errorMessage);
+        Toast.show({ 
+          type: "error", 
+          text1: "授权失败", 
+          text2: errorMessage || "用户取消授权或授权被拒绝" 
+        });
+        return false;
+      }
+      
+      // 处理深度链接成功回调
       if (url.startsWith('oriontv://oauth/callback')) {
         const success = urlObj.searchParams.get('success');
-        const error = urlObj.searchParams.get('error');
-        
         if (success === 'true') {
           logger.info("OAuth deep link callback successful");
           return await get()._handleSuccessfulOAuth();
-        }
-        
-        if (error) {
-          Toast.show({ type: "error", text1: "授权失败", text2: decodeURIComponent(error) });
-          return false;
         }
       }
       
       // 处理标准OAuth回调参数
       const code = urlObj.searchParams.get('code');
       const state = urlObj.searchParams.get('state');
-      const error = urlObj.searchParams.get('error');
-      
-      if (error) {
-        Toast.show({ type: "error", text1: "授权失败", text2: "用户取消授权或授权被拒绝" });
-        return false;
-      }
       
       if (!code || !state) {
-        Toast.show({ type: "error", text1: "授权参数错误", text2: "授权回调参数缺失" });
+        logger.warn("OAuth callback missing required parameters:", { code: !!code, state: !!state });
+        Toast.show({ 
+          type: "error", 
+          text1: "授权参数错误", 
+          text2: "授权回调参数缺失，请重试" 
+        });
         return false;
       }
       
       // 处理服务器OAuth回调
+      logger.info("Processing OAuth callback with code and state");
       const result = await api.handleOAuthCallback(code, state);
       if (result.ok) {
         logger.info("OAuth server callback successful");
         return await get()._handleSuccessfulOAuth();
       } else {
+        logger.error("OAuth server callback failed:", result.error);
         Toast.show({ 
           type: "error", 
           text1: "授权处理失败", 
@@ -332,15 +370,18 @@ const useAuthStore = create<AuthState>((set, get) => ({
       }
     } catch (error) {
       logger.error("Failed to handle OAuth callback:", error);
-      Toast.show({ type: "error", text1: "授权回调处理失败", text2: "网络错误或服务器异常" });
+      Toast.show({ 
+        type: "error", 
+        text1: "授权回调处理失败", 
+        text2: error instanceof Error ? error.message : "网络错误或服务器异常" 
+      });
       return false;
     }
   },
   
   _handleSuccessfulOAuth: async (): Promise<boolean> => {
-    // 设置登录状态
+    // 先设置基本的登录状态
     set({ 
-      isLoggedIn: true, 
       isOAuthInProgress: false, 
       isLoginModalVisible: false,
       oAuthUrl: undefined
@@ -351,16 +392,41 @@ const useAuthStore = create<AuthState>((set, get) => ({
       setTimeout(async () => {
         try {
           const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+          if (!apiBaseUrl) {
+            logger.error("API base URL not available for OAuth success handling");
+            Toast.show({ 
+              type: "error", 
+              text1: "登录失败", 
+              text2: "服务器配置不可用" 
+            });
+            resolve(false);
+            return;
+          }
+          
           // 等待Cookie生效后刷新登录状态
           await get()._waitForCookieAndRefreshStatus(apiBaseUrl);
+          
+          // 检查最终的登录状态
+          const currentLoginState = get().isLoggedIn;
+          if (currentLoginState) {
+            logger.info("OAuth login successful - user is now logged in");
+            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+            resolve(true);
+          } else {
+            logger.warn("OAuth completed but login state is false");
+            // 强制设置为登录状态
+            set({ isLoggedIn: true });
+            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+            resolve(true);
+          }
+        } catch (error) {
+          logger.error("Error during OAuth success handling:", error);
+          // 即使检查失败，也认为OAuth成功，强制设置登录状态
+          set({ isLoggedIn: true });
           Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
           resolve(true);
-        } catch (error) {
-          logger.warn("Failed to refresh login status after OAuth, but keeping login state:", error);
-          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-          resolve(true); // 即使检查失败，也认为OAuth成功
         }
-      }, 1500); // 增加等待时间确保Cookie生效
+      }, 2000); // 增加等待时间确保Cookie生效
     });
   },
   

@@ -84,22 +84,48 @@ export default function RootLayout() {
       const url = event.url;
       logger.info("Received deep link:", url);
       
-      // Check if this is an OAuth callback URL
-      if (url.includes('/oauth/callback') || 
-          url.includes('code=') || 
-          url.includes('state=') ||
-          url.startsWith('oriontv://oauth/callback')) {
-        
-        const success = await handleOAuthCallback(url);
-        // OAuth成功后导航到主页
-        if (success) {
-          logger.info("OAuth callback successful, navigating to home");
-          // 使用setTimeout确保状态更新完成后再导航
-          setTimeout(() => {
-            // 使用replace确保用户不能返回到回调页面
-            router.replace('/');
-          }, 500);
+      try {
+        // 检查是否是OAuth回调URL
+        if (url.startsWith('oriontv://oauth/callback') || 
+            url.includes('/oauth/callback') || 
+            url.includes('code=') || 
+            url.includes('state=')) {
+          
+          logger.info("Processing OAuth callback deep link");
+          
+          // 验证URL格式
+          try {
+            new URL(url); // 验证URL格式
+          } catch (urlError) {
+            logger.error("Invalid deep link URL format:", urlError);
+            Toast.show({ 
+              type: "error", 
+              text1: "链接格式错误", 
+              text2: "无效的深度链接格式" 
+            });
+            return;
+          }
+          
+          const success = await handleOAuthCallback(url);
+          // OAuth成功后导航到主页
+          if (success) {
+            logger.info("OAuth callback successful, navigating to home");
+            // 使用setTimeout确保状态更新完成后再导航
+            setTimeout(() => {
+              // 使用replace确保用户不能返回到回调页面
+              router.replace('/');
+            }, 500);
+          } else {
+            logger.warn("OAuth callback failed, staying on current page");
+          }
         }
+      } catch (error) {
+        logger.error("Error handling deep link:", error);
+        Toast.show({ 
+          type: "error", 
+          text1: "链接处理失败", 
+          text2: "处理深度链接时发生错误" 
+        });
       }
     };
 
@@ -111,23 +137,51 @@ export default function RootLayout() {
       if (url) {
         logger.info("App launched with URL:", url);
         
-        if (url.includes('/oauth/callback') || 
-            url.includes('code=') || 
-            url.includes('state=') ||
-            url.startsWith('oriontv://oauth/callback')) {
-          
-          const success = await handleOAuthCallback(url);
-          // OAuth成功后导航到主页
-          if (success) {
-            logger.info("OAuth callback on launch successful, navigating to home");
-            // 使用setTimeout确保状态更新完成后再导航
-            setTimeout(() => {
-              // 使用replace确保用户不能返回到回调页面
-              router.replace('/');
-            }, 500);
+        try {
+          if (url.startsWith('oriontv://oauth/callback') || 
+              url.includes('/oauth/callback') || 
+              url.includes('code=') || 
+              url.includes('state=')) {
+            
+            logger.info("Processing OAuth callback on app launch");
+            
+            // 验证URL格式
+            try {
+              new URL(url); // 验证URL格式
+            } catch (urlError) {
+              logger.error("Invalid launch URL format:", urlError);
+              Toast.show({ 
+                type: "error", 
+                text1: "链接格式错误", 
+                text2: "无效的启动链接格式" 
+              });
+              return;
+            }
+            
+            const success = await handleOAuthCallback(url);
+            // OAuth成功后导航到主页
+            if (success) {
+              logger.info("OAuth callback on launch successful, navigating to home");
+              // 使用setTimeout确保状态更新完成后再导航
+              setTimeout(() => {
+                // 使用replace确保用户不能返回到回调页面
+                router.replace('/');
+              }, 500);
+            } else {
+              logger.warn("OAuth callback on launch failed, staying on current page");
+            }
           }
+        } catch (error) {
+          logger.error("Error handling launch URL:", error);
+          Toast.show({ 
+            type: "error", 
+            text1: "链接处理失败", 
+            text2: "处理启动链接时发生错误" 
+          });
         }
       }
+    }).catch(error => {
+      logger.error("Error getting initial URL:", error);
     });
 
     return () => {

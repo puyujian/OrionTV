@@ -182,13 +182,16 @@ export class API {
       url.searchParams.set('code', code);
       url.searchParams.set('state', state);
       
+      console.log('Sending OAuth callback request to:', url.toString());
+      
       const response = await fetch(url.toString(), {
         method: "GET",
         headers: {
           'X-Mobile-App': 'true',
           'User-Agent': 'OrionTV/1.0 Mobile',
           'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'Content-Type': 'application/json'
         },
         credentials: 'include', // 确保接收cookies
         redirect: "manual" // 手动处理重定向以确保cookies被正确设置
@@ -212,7 +215,30 @@ export class API {
       
       // 处理不同的响应状态
       if (response.ok) {
-        // 200 OK - 直接返回成功
+        // 200 OK - 尝试解析响应体
+        try {
+          const responseText = await response.text();
+          console.log('OAuth callback response body:', responseText);
+          
+          // 如果响应体包含错误信息
+          if (responseText.includes('error') || responseText.includes('failed')) {
+            try {
+              const responseJson = JSON.parse(responseText);
+              if (responseJson.error) {
+                return { ok: false, error: responseJson.error };
+              }
+            } catch (parseError) {
+              // 不是JSON格式，继续检查文本内容
+              if (responseText.toLowerCase().includes('error')) {
+                return { ok: false, error: '授权处理失败' };
+              }
+            }
+          }
+        } catch (parseError) {
+          console.warn('Failed to parse OAuth callback response body:', parseError);
+        }
+        
+        // 200 OK 且无错误，认为成功
         return { ok: true };
       }
       
@@ -231,12 +257,25 @@ export class API {
         return { ok: true };
       }
       
-      // 其他错误状态
+      // 处理其他错误状态
       let errorText = `HTTP ${response.status}`;
       try {
         const responseText = await response.text();
+        console.log('OAuth callback error response:', responseText);
         if (responseText) {
           errorText = responseText;
+          
+          // 尝试解析JSON错误响应
+          try {
+            const errorJson = JSON.parse(responseText);
+            if (errorJson.error) {
+              errorText = errorJson.error;
+            } else if (errorJson.message) {
+              errorText = errorJson.message;
+            }
+          } catch (parseError) {
+            // 不是JSON格式，使用原始文本
+          }
         }
       } catch (parseError) {
         console.warn('Failed to parse error response:', parseError);
