@@ -17,8 +17,7 @@ import { UpdateModal } from "@/components/UpdateModal";
 import { UPDATE_CONFIG } from "@/constants/UpdateConfig";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import Logger from '@/utils/Logger';
-import { Linking } from 'react-native';
-import Cookies from "@react-native-cookies/cookies";
+import { Linking, useCallback } from 'react-native';
 
 const logger = Logger.withTag('RootLayout');
 
@@ -33,7 +32,7 @@ export default function RootLayout() {
   });
   const { loadSettings, remoteInputEnabled, apiBaseUrl } = useSettingsStore();
   const { startServer, stopServer } = useRemoteControlStore();
-  const { checkLoginStatus, handleOAuthCallback } = useAuthStore();
+  const { checkLoginStatus } = useAuthStore();
   const { checkForUpdate, lastCheckTime } = useUpdateStore();
   const responsiveConfig = useResponsiveLayout();
 
@@ -80,7 +79,7 @@ export default function RootLayout() {
   }, [remoteInputEnabled, startServer, stopServer, responsiveConfig.deviceType]);
 
   // 处理OAuth深度链接的统一函数
-  const handleOAuthDeepLink = async (url: string, isLaunch: boolean = false) => {
+  const handleOAuthDeepLink = useCallback(async (url: string, isLaunch: boolean = false) => {
     logger.info(`Processing OAuth ${isLaunch ? 'launch' : 'deep'} link:`, url);
     
     try {
@@ -210,7 +209,7 @@ export default function RootLayout() {
       });
       return false;
     }
-  };
+  }, [router]);
 
   // Handle OAuth deep links
   useEffect(() => {
@@ -257,7 +256,7 @@ export default function RootLayout() {
     return () => {
       subscription?.remove();
     };
-  }, [handleOAuthDeepLink, handleOAuthCallback, router]);
+  }, [handleOAuthDeepLink, router]);
 
   if (!loaded && !error) {
     return null;
