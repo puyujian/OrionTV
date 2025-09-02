@@ -330,44 +330,22 @@ const useAuthStore = create<AuthState>((set, get) => ({
         return false;
       }
       
-      // 处理深度链接成功回调
-      if (url.startsWith('oriontv://oauth/callback')) {
-        const success = urlObj.searchParams.get('success');
-        if (success === 'true') {
-          logger.info("OAuth deep link callback successful");
-          return await get()._handleSuccessfulOAuth();
-        }
-      }
+      // 只处理token换取cookie方案
+      const success = urlObj.searchParams.get('success');
+      const tokenParam = urlObj.searchParams.get('token');
       
-      // 处理标准OAuth回调参数
-      const code = urlObj.searchParams.get('code');
-      const state = urlObj.searchParams.get('state');
-      
-      if (!code || !state) {
-        logger.warn("OAuth callback missing required parameters:", { code: !!code, state: !!state });
-        Toast.show({ 
-          type: "error", 
-          text1: "授权参数错误", 
-          text2: "授权回调参数缺失，请重试" 
-        });
-        return false;
-      }
-      
-      // 处理服务器OAuth回调
-      logger.info("Processing OAuth callback with code and state");
-      const result = await api.handleOAuthCallback(code, state);
-      if (result.ok) {
-        logger.info("OAuth server callback successful");
+      if (success === 'true' && tokenParam) {
+        logger.info("OAuth deep link callback successful with token");
         return await get()._handleSuccessfulOAuth();
-      } else {
-        logger.error("OAuth server callback failed:", result.error);
-        Toast.show({ 
-          type: "error", 
-          text1: "授权处理失败", 
-          text2: result.error || "服务器处理授权信息时出错" 
-        });
-        return false;
       }
+      
+      logger.warn("OAuth callback missing required token parameter");
+      Toast.show({ 
+        type: "error", 
+        text1: "授权参数错误", 
+        text2: "授权回调缺少token参数，请重试" 
+      });
+      return false;
     } catch (error) {
       logger.error("Failed to handle OAuth callback:", error);
       Toast.show({ 
@@ -380,10 +358,9 @@ const useAuthStore = create<AuthState>((set, get) => ({
   },
   
   _handleSuccessfulOAuth: async (): Promise<boolean> => {
-    // 先设置基本的登录状态
+    // 先清理OAuth状态，但不立即设置登录状态
     set({ 
       isOAuthInProgress: false, 
-      isLoginModalVisible: false,
       oAuthUrl: undefined
     });
     
@@ -410,30 +387,37 @@ const useAuthStore = create<AuthState>((set, get) => ({
           const currentLoginState = get().isLoggedIn;
           if (currentLoginState) {
             logger.info("OAuth login successful - user is now logged in");
+            set({ isLoginModalVisible: false });
             Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
             resolve(true);
           } else {
             logger.warn("OAuth completed but login state is false");
             // 强制设置为登录状态
-            set({ isLoggedIn: true });
+            set({ 
+              isLoggedIn: true,
+              isLoginModalVisible: false
+            });
             Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
             resolve(true);
           }
         } catch (error) {
           logger.error("Error during OAuth success handling:", error);
           // 即使检查失败，也认为OAuth成功，强制设置登录状态
-          set({ isLoggedIn: true });
+          set({ 
+            isLoggedIn: true,
+            isLoginModalVisible: false
+          });
           Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
           resolve(true);
         }
-      }, 2000); // 增加等待时间确保Cookie生效
+      }, 2500); // 增加等待时间确保Cookie生效
     });
   },
   
   _waitForCookieAndRefreshStatus: async (apiBaseUrl: string): Promise<void> => {
     // 多次尝试检查Cookie状态，直到成功或超时
-    const maxAttempts = 5;
-    const intervalMs = 800;
+    const maxAttempts = 8; // 增加尝试次数
+    const intervalMs = 600; // 减少间隔时间，提高响应速度
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -448,7 +432,13 @@ const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
     
-    throw new Error("Failed to refresh login status after multiple attempts");
+    // 最后一次尝试，如果仍然失败，记录警告但继续执行
+    logger.warn("Failed to refresh login status after multiple attempts, but proceeding");
+    try {
+      await get().checkLoginStatus(apiBaseUrl);
+    } catch (finalError) {
+      logger.warn("Final login status check also failed:", finalError);
+    }
   },
   
   clearOAuthUrl: () => set({ oAuthUrl: undefined, isOAuthInProgress: false }),
