@@ -110,11 +110,11 @@ export default function RootLayout() {
           // 解析深度链接URL
           const urlObj = new URL(url);
           const success = urlObj.searchParams.get('success');
-          const cookieParam = urlObj.searchParams.get('cookie');
+          const tokenParam = urlObj.searchParams.get('token');
 
-          // 优先处理深度链接直接传递的cookie
-          if (success === 'true' && cookieParam) {
-            logger.info("Received cookie via deep link");
+          // 优先处理深度链接传递的token
+          if (success === 'true' && tokenParam) {
+            logger.info("Received token via deep link");
             
             try {
               // 获取当前API基础URL
@@ -123,15 +123,33 @@ export default function RootLayout() {
                 throw new Error("API base URL not available");
               }
 
-              // 解码并设置cookie
-              const decodedCookie = decodeURIComponent(cookieParam);
-              logger.info("Setting cookie from deep link:", { 
-                hasCookie: !!decodedCookie,
-                apiBaseUrl 
+              // 用token换取cookie
+              const exchangeUrl = `${apiBaseUrl}/api/oauth/exchange-token?token=${encodeURIComponent(tokenParam)}`;
+              logger.info("Exchanging token for cookie:", exchangeUrl);
+
+              const response = await fetch(exchangeUrl, {
+                method: "GET",
+                headers: {
+                  'Accept': 'application/json',
+                  'Cache-Control': 'no-cache',
+                },
+                credentials: 'include'
               });
 
-              await Cookies.set(apiBaseUrl, 'auth', decodedCookie);
-              logger.info("Cookie set successfully from deep link");
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+              }
+
+              const result = await response.json();
+              if (!result.success || !result.cookie) {
+                throw new Error('返回数据格式错误');
+              }
+
+              logger.info("Token exchange successful, setting cookie");
+
+              // 设置cookie
+              await Cookies.set(apiBaseUrl, 'auth', result.cookie);
               
               // 设置登录状态
               const { set } = useAuthStore.getState();
@@ -151,12 +169,12 @@ export default function RootLayout() {
               setTimeout(() => {
                 router.replace('/');
               }, 500);
-            } catch (cookieError) {
-              logger.error("Failed to set cookie from deep link:", cookieError);
+            } catch (exchangeError) {
+              logger.error("Failed to exchange token for cookie:", exchangeError);
               Toast.show({ 
                 type: "error", 
                 text1: "登录失败", 
-                text2: "无法设置认证信息，请重试" 
+                text2: exchangeError instanceof Error ? exchangeError.message : "无法获取认证信息" 
               });
             }
           } else {
@@ -215,11 +233,11 @@ export default function RootLayout() {
             // 解析深度链接URL
             const urlObj = new URL(url);
             const success = urlObj.searchParams.get('success');
-            const cookieParam = urlObj.searchParams.get('cookie');
+            const tokenParam = urlObj.searchParams.get('token');
 
-            // 优先处理深度链接直接传递的cookie
-            if (success === 'true' && cookieParam) {
-              logger.info("Received cookie via launch deep link");
+            // 优先处理深度链接传递的token
+            if (success === 'true' && tokenParam) {
+              logger.info("Received token via launch deep link");
               
               try {
                 // 获取当前API基础URL
@@ -228,15 +246,33 @@ export default function RootLayout() {
                   throw new Error("API base URL not available");
                 }
 
-                // 解码并设置cookie
-                const decodedCookie = decodeURIComponent(cookieParam);
-                logger.info("Setting cookie from launch deep link:", { 
-                  hasCookie: !!decodedCookie,
-                  apiBaseUrl 
+                // 用token换取cookie
+                const exchangeUrl = `${apiBaseUrl}/api/oauth/exchange-token?token=${encodeURIComponent(tokenParam)}`;
+                logger.info("Exchanging token for cookie on launch:", exchangeUrl);
+
+                const response = await fetch(exchangeUrl, {
+                  method: "GET",
+                  headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache',
+                  },
+                  credentials: 'include'
                 });
 
-                await Cookies.set(apiBaseUrl, 'auth', decodedCookie);
-                logger.info("Cookie set successfully from launch deep link");
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (!result.success || !result.cookie) {
+                  throw new Error('返回数据格式错误');
+                }
+
+                logger.info("Token exchange successful on launch, setting cookie");
+
+                // 设置cookie
+                await Cookies.set(apiBaseUrl, 'auth', result.cookie);
                 
                 // 设置登录状态
                 const { set } = useAuthStore.getState();
@@ -256,12 +292,12 @@ export default function RootLayout() {
                 setTimeout(() => {
                   router.replace('/');
                 }, 500);
-              } catch (cookieError) {
-                logger.error("Failed to set cookie from launch deep link:", cookieError);
+              } catch (exchangeError) {
+                logger.error("Failed to exchange token for cookie on launch:", exchangeError);
                 Toast.show({ 
                   type: "error", 
                   text1: "登录失败", 
-                  text2: "无法设置认证信息，请重试" 
+                  text2: exchangeError instanceof Error ? exchangeError.message : "无法获取认证信息" 
                 });
               }
             } else {
