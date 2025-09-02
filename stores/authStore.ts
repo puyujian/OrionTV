@@ -30,8 +30,6 @@ interface AuthState {
   startLinuxDoOAuth: () => Promise<void>;
   handleOAuthCallback: (url: string) => Promise<boolean>;
   clearOAuthUrl: () => void;
-  _handleSuccessfulOAuth: () => Promise<boolean>;
-  _waitForCookieAndRefreshStatus: (apiBaseUrl: string) => Promise<void>;
 }
 
 const useAuthStore = create<AuthState>((set, get) => ({
@@ -312,7 +310,20 @@ const useAuthStore = create<AuthState>((set, get) => ({
   handleOAuthCallback: async (url: string): Promise<boolean> => {
     try {
       logger.info("Handling OAuth callback:", url);
-      const urlObj = new URL(url);
+      
+      // 验证URL格式
+      let urlObj: URL;
+      try {
+        urlObj = new URL(url);
+      } catch (urlError) {
+        logger.error("Invalid URL format:", urlError);
+        Toast.show({ 
+          type: "error", 
+          text1: "链接格式错误", 
+          text2: "无效的链接格式" 
+        });
+        return false;
+      }
       
       // 清理OAuth状态
       set({ isOAuthInProgress: false, oAuthUrl: undefined });
@@ -330,44 +341,61 @@ const useAuthStore = create<AuthState>((set, get) => ({
         return false;
       }
       
-      // 只处理token换取cookie方案
+      // 处理token换取cookie方案
       const success = urlObj.searchParams.get('success');
       const tokenParam = urlObj.searchParams.get('token');
       
       if (success === 'true' && tokenParam) {
-        logger.info("OAuth deep link callback successful with token");
+        logger.info("OAuth callback successful with token, starting exchange");
         
-        // 使用与普通登录相同的方式：调用checkLoginStatus验证cookie
-        const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-        if (!apiBaseUrl) {
-          logger.error("API base URL not available for OAuth callback");
+        try {
+          // 使用新的API方法交换token
+          const exchangeResult = await api.exchangeOAuthToken(tokenParam);
+          
+          if (!exchangeResult.ok) {
+            throw new Error(exchangeResult.error || "token交换失败");
+          }
+          
+          logger.info("Token exchange successful, checking login status");
+          
+          // 等待一小段时间确保cookie生效
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // 获取API基础URL
+          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+          if (!apiBaseUrl) {
+            throw new Error("API base URL not available");
+          }
+          
+          // 验证登录状态
+          await get().checkLoginStatus(apiBaseUrl);
+          
+          // 检查最终的登录状态
+          const currentLoginState = get().isLoggedIn;
+          if (currentLoginState) {
+            logger.info("OAuth login successful - user is now logged in");
+            set({ isLoginModalVisible: false });
+            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+            return true;
+          } else {
+            // 即使checkLoginStatus返回false，也认为OAuth成功，强制设置登录状态
+            logger.warn("OAuth completed but login state is false, forcing login");
+            set({ 
+              isLoggedIn: true,
+              isLoginModalVisible: false
+            });
+            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
+            return true;
+          }
+          
+        } catch (exchangeError) {
+          logger.error("Failed to exchange token for cookie:", exchangeError);
           Toast.show({ 
             type: "error", 
             text1: "登录失败", 
-            text2: "服务器配置不可用" 
+            text2: exchangeError instanceof Error ? exchangeError.message : "无法获取认证信息" 
           });
           return false;
-        }
-        
-        // 调用checkLoginStatus验证cookie是否设置成功
-        await get().checkLoginStatus(apiBaseUrl);
-        
-        // 检查最终的登录状态
-        const currentLoginState = get().isLoggedIn;
-        if (currentLoginState) {
-          logger.info("OAuth login successful - user is now logged in");
-          set({ isLoginModalVisible: false });
-          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-          return true;
-        } else {
-          logger.warn("OAuth completed but login state is false");
-          // 即使checkLoginStatus返回false，也认为OAuth成功，强制设置登录状态
-          set({ 
-            isLoggedIn: true,
-            isLoginModalVisible: false
-          });
-          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-          return true;
         }
       }
       
@@ -389,89 +417,6 @@ const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
   
-  _handleSuccessfulOAuth: async (): Promise<boolean> => {
-    // 先清理OAuth状态，但不立即设置登录状态
-    set({ 
-      isOAuthInProgress: false, 
-      oAuthUrl: undefined
-    });
-    
-    // 使用Promise包装延迟检查，避免竞态条件
-    return new Promise((resolve) => {
-      setTimeout(async () => {
-        try {
-          const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
-          if (!apiBaseUrl) {
-            logger.error("API base URL not available for OAuth success handling");
-            Toast.show({ 
-              type: "error", 
-              text1: "登录失败", 
-              text2: "服务器配置不可用" 
-            });
-            resolve(false);
-            return;
-          }
-          
-          // 等待Cookie生效后刷新登录状态
-          await get()._waitForCookieAndRefreshStatus(apiBaseUrl);
-          
-          // 检查最终的登录状态
-          const currentLoginState = get().isLoggedIn;
-          if (currentLoginState) {
-            logger.info("OAuth login successful - user is now logged in");
-            set({ isLoginModalVisible: false });
-            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-            resolve(true);
-          } else {
-            logger.warn("OAuth completed but login state is false");
-            // 强制设置为登录状态
-            set({ 
-              isLoggedIn: true,
-              isLoginModalVisible: false
-            });
-            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-            resolve(true);
-          }
-        } catch (error) {
-          logger.error("Error during OAuth success handling:", error);
-          // 即使检查失败，也认为OAuth成功，强制设置登录状态
-          set({ 
-            isLoggedIn: true,
-            isLoginModalVisible: false
-          });
-          Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-          resolve(true);
-        }
-      }, 2500); // 增加等待时间确保Cookie生效
-    });
-  },
-  
-  _waitForCookieAndRefreshStatus: async (apiBaseUrl: string): Promise<void> => {
-    // 多次尝试检查Cookie状态，直到成功或超时
-    const maxAttempts = 8; // 增加尝试次数
-    const intervalMs = 600; // 减少间隔时间，提高响应速度
-    
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        await get().checkLoginStatus(apiBaseUrl);
-        logger.info(`Login status refresh successful on attempt ${attempt}`);
-        return;
-      } catch (error) {
-        logger.warn(`Login status check failed on attempt ${attempt}:`, error);
-        if (attempt < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, intervalMs));
-        }
-      }
-    }
-    
-    // 最后一次尝试，如果仍然失败，记录警告但继续执行
-    logger.warn("Failed to refresh login status after multiple attempts, but proceeding");
-    try {
-      await get().checkLoginStatus(apiBaseUrl);
-    } catch (finalError) {
-      logger.warn("Final login status check also failed:", finalError);
-    }
-  },
   
   clearOAuthUrl: () => set({ oAuthUrl: undefined, isOAuthInProgress: false }),
 }));

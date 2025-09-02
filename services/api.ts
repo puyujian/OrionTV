@@ -447,6 +447,42 @@ export class API {
     });
     return response.json();
   }
+
+  async exchangeOAuthToken(token: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/api/oauth/exchange-token?token=${encodeURIComponent(token)}`, {
+        method: "GET",
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          ok: false,
+          error: errorData.error || `HTTP ${response.status}`
+        };
+      }
+
+      const result = await response.json();
+      if (!result.success || !result.cookie) {
+        return {
+          ok: false,
+          error: '返回数据格式错误'
+        };
+      }
+
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : '网络错误'
+      };
+    }
+  }
 }
 
 // 默认实例
