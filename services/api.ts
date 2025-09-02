@@ -448,8 +448,10 @@ export class API {
     return response.json();
   }
 
-  async exchangeOAuthToken(token: string): Promise<{ ok: boolean; error?: string }> {
+  async exchangeOAuthToken(token: string): Promise<{ ok: boolean; error?: string; cookieData?: string }> {
     try {
+      console.log('正在交换OAuth token:', token);
+      
       const response = await fetch(`${this.baseURL}/api/oauth/exchange-token?token=${encodeURIComponent(token)}`, {
         method: "GET",
         headers: {
@@ -459,8 +461,12 @@ export class API {
         credentials: 'include'
       });
 
+      console.log('Token交换响应状态:', response.status);
+      console.log('响应头:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('Token交换失败:', errorData);
         return {
           ok: false,
           error: errorData.error || `HTTP ${response.status}`
@@ -468,15 +474,50 @@ export class API {
       }
 
       const result = await response.json();
-      if (!result.success || !result.cookie) {
+      console.log('Token交换响应数据:', result);
+      
+      if (!result.success) {
         return {
           ok: false,
-          error: '返回数据格式错误'
+          error: '服务器返回失败状态'
         };
       }
 
+      // 检查是否有cookie数据
+      if (result.cookie) {
+        console.log('服务器返回cookie数据:', result.cookie);
+        try {
+          // 尝试解码cookie数据
+          const decodedCookie = decodeURIComponent(result.cookie);
+          console.log('解码后的cookie数据:', decodedCookie);
+          
+          // 手动设置cookie到RN Cookie管理器
+          const Cookies = require("@react-native-cookies/cookies");
+          await Cookies.set(this.baseURL, {
+            name: 'auth',
+            value: result.cookie,
+            path: '/',
+            domain: new URL(this.baseURL).hostname,
+            httpOnly: false,
+            secure: this.baseURL.startsWith('https')
+          });
+          
+          console.log('已手动设置auth cookie');
+        } catch (cookieError) {
+          console.warn('手动设置cookie失败:', cookieError);
+        }
+        
+        return { 
+          ok: true,
+          cookieData: result.cookie
+        };
+      }
+
+      console.log('Token交换成功但无cookie数据');
       return { ok: true };
+      
     } catch (error) {
+      console.error('Token交换网络错误:', error);
       return {
         ok: false,
         error: error instanceof Error ? error.message : '网络错误'

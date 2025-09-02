@@ -356,10 +356,7 @@ const useAuthStore = create<AuthState>((set, get) => ({
             throw new Error(exchangeResult.error || "token交换失败");
           }
           
-          logger.info("Token exchange successful, checking login status");
-          
-          // 等待一小段时间确保cookie生效
-          await new Promise(resolve => setTimeout(resolve, 500));
+          logger.info("Token exchange successful, verifying login status");
           
           // 获取API基础URL
           const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
@@ -367,25 +364,84 @@ const useAuthStore = create<AuthState>((set, get) => ({
             throw new Error("API base URL not available");
           }
           
-          // 验证登录状态
-          await get().checkLoginStatus(apiBaseUrl);
+          // 增强的登录状态验证，带重试机制
+          let isLoginVerified = false;
+          const maxVerifyAttempts = 8; // 增加验证尝试次数
+          const verifyDelay = 750; // 增加延迟时间
           
-          // 检查最终的登录状态
-          const currentLoginState = get().isLoggedIn;
-          if (currentLoginState) {
-            logger.info("OAuth login successful - user is now logged in");
-            set({ isLoginModalVisible: false });
-            Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
-            return true;
-          } else {
-            // 即使checkLoginStatus返回false，也认为OAuth成功，强制设置登录状态
-            logger.warn("OAuth completed but login state is false, forcing login");
+          for (let attempt = 1; attempt <= maxVerifyAttempts; attempt++) {
+            logger.info(`登录状态验证尝试 ${attempt}/${maxVerifyAttempts}`);
+            
+            // 等待一段时间让cookie生效
+            await new Promise(resolve => setTimeout(resolve, verifyDelay));
+            
+            try {
+              // 直接检查cookie是否存在
+              const cookies = await Cookies.get(apiBaseUrl);
+              logger.info(`验证尝试 ${attempt} - Cookie状态:`, {
+                hasAuth: !!cookies?.auth,
+                cookieKeys: cookies ? Object.keys(cookies) : [],
+                authCookieValue: cookies?.auth ? 'exists' : 'missing'
+              });
+              
+              if (cookies?.auth) {
+                // 如果有auth cookie，再验证一次登录状态
+                await get().checkLoginStatus(apiBaseUrl);
+                const currentLoginState = get().isLoggedIn;
+                
+                if (currentLoginState) {
+                  isLoginVerified = true;
+                  logger.info(`登录状态验证成功 (第${attempt}次尝试)`);
+                  break;
+                } else {
+                  logger.warn(`第${attempt}次尝试：有auth cookie但登录状态为false`);
+                }
+              } else {
+                logger.warn(`第${attempt}次尝试：未找到auth cookie`);
+              }
+              
+              // 如果是最后一次尝试，直接检查登录状态
+              if (attempt === maxVerifyAttempts) {
+                await get().checkLoginStatus(apiBaseUrl);
+                isLoginVerified = get().isLoggedIn;
+              }
+              
+            } catch (verifyError) {
+              logger.warn(`登录状态验证失败 (第${attempt}次尝试):`, verifyError);
+              
+              // 最后一次尝试时仍然失败，但如果有cookie数据就认为成功
+              if (attempt === maxVerifyAttempts && exchangeResult.cookieData) {
+                logger.info("虽然验证失败，但有cookie数据，强制设置为已登录");
+                isLoginVerified = true;
+              }
+            }
+          }
+          
+          if (isLoginVerified) {
+            logger.info("OAuth登录验证成功");
             set({ 
               isLoggedIn: true,
               isLoginModalVisible: false
             });
             Toast.show({ type: "success", text1: "LinuxDo 授权登录成功" });
             return true;
+          } else {
+            // 即使验证失败，如果有cookie数据也认为成功
+            if (exchangeResult.cookieData) {
+              logger.warn("登录状态验证失败但有cookie数据，强制设置为已登录");
+              set({ 
+                isLoggedIn: true,
+                isLoginModalVisible: false
+              });
+              Toast.show({ 
+                type: "success", 
+                text1: "LinuxDo 授权登录成功",
+                text2: "如有问题请重启应用"
+              });
+              return true;
+            } else {
+              throw new Error("登录状态验证失败且无cookie数据");
+            }
           }
           
         } catch (exchangeError) {
