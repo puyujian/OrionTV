@@ -43,7 +43,10 @@
       "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\callback/**)",
       "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src/**)",
       "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\server-config/**)",
-      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\login/**)"
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\login/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\authorize/**)",
+      "Read(C:\\Users\\60350\\Desktop\\LunaTV\\src\\app\\api\\oauth\\callback/**)"
     ],
     "deny": []
   }

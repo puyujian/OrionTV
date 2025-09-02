@@ -18,6 +18,7 @@ import { UPDATE_CONFIG } from "@/constants/UpdateConfig";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import Logger from '@/utils/Logger';
 import { Linking } from 'react-native';
+import Cookies from "@react-native-cookies/cookies";
 
 const logger = Logger.withTag('RootLayout');
 
@@ -105,18 +106,71 @@ export default function RootLayout() {
             });
             return;
           }
-          
-          const success = await handleOAuthCallback(url);
-          // OAuth成功后导航到主页
-          if (success) {
-            logger.info("OAuth callback successful, navigating to home");
-            // 使用setTimeout确保状态更新完成后再导航
-            setTimeout(() => {
-              // 使用replace确保用户不能返回到回调页面
-              router.replace('/');
-            }, 500);
+
+          // 解析深度链接URL
+          const urlObj = new URL(url);
+          const success = urlObj.searchParams.get('success');
+          const cookieParam = urlObj.searchParams.get('cookie');
+
+          // 优先处理深度链接直接传递的cookie
+          if (success === 'true' && cookieParam) {
+            logger.info("Received cookie via deep link");
+            
+            try {
+              // 获取当前API基础URL
+              const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+              if (!apiBaseUrl) {
+                throw new Error("API base URL not available");
+              }
+
+              // 解码并设置cookie
+              const decodedCookie = decodeURIComponent(cookieParam);
+              logger.info("Setting cookie from deep link:", { 
+                hasCookie: !!decodedCookie,
+                apiBaseUrl 
+              });
+
+              await Cookies.set(apiBaseUrl, 'auth', decodedCookie);
+              logger.info("Cookie set successfully from deep link");
+              
+              // 设置登录状态
+              const { set } = useAuthStore.getState();
+              set({ 
+                isLoggedIn: true, 
+                isLoginModalVisible: false,
+                isOAuthInProgress: false,
+                oAuthUrl: undefined
+              });
+              
+              Toast.show({ 
+                type: "success", 
+                text1: "LinuxDo 授权登录成功" 
+              });
+              
+              // 导航到主页
+              setTimeout(() => {
+                router.replace('/');
+              }, 500);
+            } catch (cookieError) {
+              logger.error("Failed to set cookie from deep link:", cookieError);
+              Toast.show({ 
+                type: "error", 
+                text1: "登录失败", 
+                text2: "无法设置认证信息，请重试" 
+              });
+            }
           } else {
-            logger.warn("OAuth callback failed, staying on current page");
+            // 回退到原有Cookie同步逻辑
+            logger.info("No cookie in deep link, falling back to callback handling");
+            const success = await handleOAuthCallback(url);
+            if (success) {
+              logger.info("OAuth callback successful, navigating to home");
+              setTimeout(() => {
+                router.replace('/');
+              }, 500);
+            } else {
+              logger.warn("OAuth callback failed, staying on current page");
+            }
           }
         }
       } catch (error) {
@@ -157,18 +211,71 @@ export default function RootLayout() {
               });
               return;
             }
-            
-            const success = await handleOAuthCallback(url);
-            // OAuth成功后导航到主页
-            if (success) {
-              logger.info("OAuth callback on launch successful, navigating to home");
-              // 使用setTimeout确保状态更新完成后再导航
-              setTimeout(() => {
-                // 使用replace确保用户不能返回到回调页面
-                router.replace('/');
-              }, 500);
+
+            // 解析深度链接URL
+            const urlObj = new URL(url);
+            const success = urlObj.searchParams.get('success');
+            const cookieParam = urlObj.searchParams.get('cookie');
+
+            // 优先处理深度链接直接传递的cookie
+            if (success === 'true' && cookieParam) {
+              logger.info("Received cookie via launch deep link");
+              
+              try {
+                // 获取当前API基础URL
+                const apiBaseUrl = useSettingsStore.getState().apiBaseUrl;
+                if (!apiBaseUrl) {
+                  throw new Error("API base URL not available");
+                }
+
+                // 解码并设置cookie
+                const decodedCookie = decodeURIComponent(cookieParam);
+                logger.info("Setting cookie from launch deep link:", { 
+                  hasCookie: !!decodedCookie,
+                  apiBaseUrl 
+                });
+
+                await Cookies.set(apiBaseUrl, 'auth', decodedCookie);
+                logger.info("Cookie set successfully from launch deep link");
+                
+                // 设置登录状态
+                const { set } = useAuthStore.getState();
+                set({ 
+                  isLoggedIn: true, 
+                  isLoginModalVisible: false,
+                  isOAuthInProgress: false,
+                  oAuthUrl: undefined
+                });
+                
+                Toast.show({ 
+                  type: "success", 
+                  text1: "LinuxDo 授权登录成功" 
+                });
+                
+                // 导航到主页
+                setTimeout(() => {
+                  router.replace('/');
+                }, 500);
+              } catch (cookieError) {
+                logger.error("Failed to set cookie from launch deep link:", cookieError);
+                Toast.show({ 
+                  type: "error", 
+                  text1: "登录失败", 
+                  text2: "无法设置认证信息，请重试" 
+                });
+              }
             } else {
-              logger.warn("OAuth callback on launch failed, staying on current page");
+              // 回退到原有Cookie同步逻辑
+              logger.info("No cookie in launch deep link, falling back to callback handling");
+              const success = await handleOAuthCallback(url);
+              if (success) {
+                logger.info("OAuth callback on launch successful, navigating to home");
+                setTimeout(() => {
+                  router.replace('/');
+                }, 500);
+              } else {
+                logger.warn("OAuth callback on launch failed, staying on current page");
+              }
             }
           }
         } catch (error) {
