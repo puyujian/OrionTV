@@ -2,8 +2,8 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native
 import { useFonts } from "expo-font";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
-import { Platform, View, StyleSheet } from "react-native";
+import { useEffect, useCallback } from "react";
+import { Platform, View, StyleSheet, Linking } from "react-native";
 import Toast from "react-native-toast-message";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -17,7 +17,6 @@ import { UpdateModal } from "@/components/UpdateModal";
 import { UPDATE_CONFIG } from "@/constants/UpdateConfig";
 import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 import Logger from '@/utils/Logger';
-import { Linking, useCallback } from 'react-native';
 
 const logger = Logger.withTag('RootLayout');
 
