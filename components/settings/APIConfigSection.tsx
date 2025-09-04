@@ -1,5 +1,5 @@
 import React, { useState, useRef, useImperativeHandle, forwardRef } from "react";
-import { View, TextInput, StyleSheet, Animated } from "react-native";
+import { View, TextInput, StyleSheet, Animated, Platform } from "react-native";
 import { useTVEventHandler } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { SettingsSection } from "./SettingsSection";
@@ -7,11 +7,13 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
 import { useButtonAnimation } from "@/hooks/useAnimation";
 import { Colors } from "@/constants/Colors";
+import { useResponsiveLayout } from "@/hooks/useResponsiveLayout";
 
 interface APIConfigSectionProps {
   onChanged: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  onPress?: () => void;
   hideDescription?: boolean;
 }
 
@@ -20,13 +22,14 @@ export interface APIConfigSectionRef {
 }
 
 export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSectionProps>(
-  ({ onChanged, onFocus, onBlur, hideDescription = false }, ref) => {
+  ({ onChanged, onFocus, onBlur, onPress, hideDescription = false }, ref) => {
     const { apiBaseUrl, setApiBaseUrl, remoteInputEnabled } = useSettingsStore();
     const { serverUrl } = useRemoteControlStore();
     const [isInputFocused, setIsInputFocused] = useState(false);
     const [isSectionFocused, setIsSectionFocused] = useState(false);
     const inputRef = useRef<TextInput>(null);
     const inputAnimationStyle = useButtonAnimation(isSectionFocused, 1.01);
+    const deviceType = useResponsiveLayout().deviceType;
 
     const handleUrlChange = (url: string) => {
       setApiBaseUrl(url);
@@ -60,10 +63,28 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
       [isSectionFocused]
     );
 
+    const handlePress = () => {
+      inputRef.current?.focus();
+      onPress?.();
+    }
+
     useTVEventHandler(handleTVEvent);
 
+    const [selection, setSelection] = useState<{ start: number; end: number }>({
+      start: 0,
+      end: 0,
+    });
+    // 当用户手动移动光标或选中文本时，同步到 state（可选）
+    const onSelectionChange = ({
+      nativeEvent: { selection },
+    }: any) => {
+      setSelection(selection);
+    };
+
     return (
-      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}>
+      <SettingsSection focusable onFocus={handleSectionFocus} onBlur={handleSectionBlur}
+        {...Platform.isTV || deviceType !== 'tv' ? undefined : { onPress: handlePress }}
+      >
         <View style={styles.inputContainer}>
           <View style={styles.titleContainer}>
             <ThemedText style={styles.sectionTitle}>API 地址</ThemedText>
@@ -81,7 +102,21 @@ export const APIConfigSection = forwardRef<APIConfigSectionRef, APIConfigSection
               placeholderTextColor="#888"
               autoCapitalize="none"
               autoCorrect={false}
-              onFocus={() => setIsInputFocused(true)}
+              onFocus={() => {
+                setIsInputFocused(true);
+                // 将光标移动到文本末尾
+                const end = apiBaseUrl.length;
+                setSelection({ start: end, end: end });
+                // 有时需要延迟一下，让系统先完成 focus 再设置 selection
+                //（在 Android 上更可靠）
+                setTimeout(() => {
+                  // 对于受控的 selection 已经生效，这里仅作保险
+                  inputRef.current?.setNativeProps({ selection: { start: end, end: end } });
+                }, 0);
+              }}
+              selection={selection}
+              onSelectionChange={onSelectionChange} // 可选
+
               onBlur={() => setIsInputFocused(false)}
             />
           </Animated.View>

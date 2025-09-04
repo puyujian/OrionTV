@@ -150,126 +150,69 @@ const VideoCard = forwardRef<View, VideoCardProps>(
 
     return (
       <Animated.View style={[styles.wrapper, animatedStyle, { opacity: fadeAnim }]}>
-        {Platform.isTV || deviceType !== 'tv' ? (
-          <TouchableOpacity
-            onPress={handlePress}
-            onLongPress={handleLongPress}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            style={styles.pressable}
-            activeOpacity={1}
-            delayLongPress={1000}
-          >
-            <View style={styles.card}>
-              <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
-              {isFocused && (
-                <View style={styles.overlay}>
-                  {isContinueWatching && (
-                    <View style={styles.continueWatchingBadge}>
-                      <Play size={16} color="#ffffff" fill="#ffffff" />
-                      <ThemedText style={styles.continueWatchingText}>继续观看</ThemedText>
-                    </View>
-                  )}
-                </View>
-              )}
+        <Pressable
+          android_ripple={Platform.isTV || deviceType !== 'tv' ? { color: 'transparent' } : { color: Colors.dark.link }}
+          onPress={handlePress}
+          onLongPress={handleLongPress}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          style={({ pressed }) => [
+            styles.pressable,
+            {
+              zIndex: pressed ? 999 : 1, // 确保按下时有最高优先级
+            },
+          ]}
+          // activeOpacity={1}
+          delayLongPress={1000}
+        >
+          <View style={styles.card}>
+            <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
+            {isFocused && (
+              <View style={styles.overlay}>
+                {isContinueWatching && (
+                  <View style={styles.continueWatchingBadge}>
+                    <Play size={16} color="#ffffff" fill="#ffffff" />
+                    <ThemedText style={styles.continueWatchingText}>继续观看</ThemedText>
+                  </View>
+                )}
+              </View>
+            )}
 
-              {/* 进度条 */}
-              {isContinueWatching && (
-                <View style={styles.progressContainer}>
-                  <View style={[styles.progressBar, { width: `${(progress || 0) * 100}%` }]} />
-                </View>
-              )}
+            {/* 进度条 */}
+            {isContinueWatching && (
+              <View style={styles.progressContainer}>
+                <View style={[styles.progressBar, { width: `${(progress || 0) * 100}%` }]} />
+              </View>
+            )}
 
-              {rate && (
-                <View style={styles.ratingContainer}>
-                  <Star size={12} color="#FFD700" fill="#FFD700" />
-                  <ThemedText style={styles.ratingText}>{rate}</ThemedText>
-                </View>
-              )}
-              {year && (
-                <View style={styles.yearBadge}>
-                  <Text style={styles.badgeText}>{year}</Text>
-                </View>
-              )}
-              {sourceName && (
-                <View style={styles.sourceNameBadge}>
-                  <Text style={styles.badgeText}>{sourceName}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.infoContainer}>
-              <ThemedText numberOfLines={1}>{title}</ThemedText>
-              {isContinueWatching && (
-                <View style={styles.infoRow}>
-                  <ThemedText style={styles.continueLabel}>
-                    第{episodeIndex}集 已观看 {Math.round((progress || 0) * 100)}%
-                  </ThemedText>
-                </View>
-              )}
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <Pressable
-            android_ripple={{ color: Colors.dark.link }}
-            onPress={handlePress}
-            onLongPress={handleLongPress}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            style={styles.pressable}
-            // activeOpacity={1}
-            delayLongPress={1000}
-          >
-            <View style={styles.card}>
-              <Image source={{ uri: api.getImageProxyUrl(poster) }} style={styles.poster} />
-              {isFocused && (
-                <View style={styles.overlay}>
-                  {isContinueWatching && (
-                    <View style={styles.continueWatchingBadge}>
-                      <Play size={16} color="#ffffff" fill="#ffffff" />
-                      <ThemedText style={styles.continueWatchingText}>继续观看</ThemedText>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* 进度条 */}
-              {isContinueWatching && (
-                <View style={styles.progressContainer}>
-                  <View style={[styles.progressBar, { width: `${(progress || 0) * 100}%` }]} />
-                </View>
-              )}
-
-              {rate && (
-                <View style={styles.ratingContainer}>
-                  <Star size={12} color="#FFD700" fill="#FFD700" />
-                  <ThemedText style={styles.ratingText}>{rate}</ThemedText>
-                </View>
-              )}
-              {year && (
-                <View style={styles.yearBadge}>
-                  <Text style={styles.badgeText}>{year}</Text>
-                </View>
-              )}
-              {sourceName && (
-                <View style={styles.sourceNameBadge}>
-                  <Text style={styles.badgeText}>{sourceName}</Text>
-                </View>
-              )}
-            </View>
-            <View style={styles.infoContainer}>
-              <ThemedText numberOfLines={1}>{title}</ThemedText>
-              {isContinueWatching && (
-                <View style={styles.infoRow}>
-                  <ThemedText style={styles.continueLabel}>
-                    第{episodeIndex}集 已观看 {Math.round((progress || 0) * 100)}%
-                  </ThemedText>
-                </View>
-              )}
-            </View>
-          </Pressable>
-
-        )}
-
+            {rate && (
+              <View style={styles.ratingContainer}>
+                <Star size={12} color="#FFD700" fill="#FFD700" />
+                <ThemedText style={styles.ratingText}>{rate}</ThemedText>
+              </View>
+            )}
+            {year && (
+              <View style={styles.yearBadge}>
+                <Text style={styles.badgeText}>{year}</Text>
+              </View>
+            )}
+            {sourceName && (
+              <View style={styles.sourceNameBadge}>
+                <Text style={styles.badgeText}>{sourceName}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.infoContainer}>
+            <ThemedText numberOfLines={1}>{title}</ThemedText>
+            {isContinueWatching && (
+              <View style={styles.infoRow}>
+                <ThemedText style={styles.continueLabel}>
+                  第{episodeIndex}集 已观看 {Math.round((progress || 0) * 100)}%
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        </Pressable>
       </Animated.View>
     );
   }

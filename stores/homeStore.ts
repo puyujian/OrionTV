@@ -55,6 +55,26 @@ const initialCategories: Category[] = [
   { title: "豆瓣 Top250", type: "movie", tag: "top250" },
 ];
 
+// 添加缓存项接口
+interface CacheItem {
+  data: RowItem[];
+  timestamp: number;
+  type: 'movie' | 'tv' | 'record';
+  hasMore: boolean;
+}
+
+const CACHE_EXPIRE_TIME = 5 * 60 * 1000; // 5分钟过期
+const MAX_CACHE_SIZE = 10; // 最大缓存容量
+const MAX_ITEMS_PER_CACHE = 40; // 每个缓存最大条目数
+
+const getCacheKey = (category: Category) => {
+  return `${category.type || 'unknown'}-${category.title}-${category.tag || ''}`;
+};
+
+const isValidCache = (cacheItem: CacheItem) => {
+  return Date.now() - cacheItem.timestamp < CACHE_EXPIRE_TIME;
+};
+
 interface HomeState {
   categories: Category[];
   selectedCategory: Category;
@@ -72,7 +92,7 @@ interface HomeState {
 }
 
 // 内存缓存，应用生命周期内有效
-const dataCache = new Map<string, RowItem[]>();
+const dataCache = new Map<string, CacheItem>();
 
 const useHomeStore = create<HomeState>((set, get) => ({
   categories: initialCategories,
@@ -87,29 +107,30 @@ const useHomeStore = create<HomeState>((set, get) => ({
   fetchInitialData: async () => {
     const { apiBaseUrl } = useSettingsStore.getState();
     await useAuthStore.getState().checkLoginStatus(apiBaseUrl);
-    
+
     const { selectedCategory } = get();
-    const cacheKey = `${selectedCategory.title}-${selectedCategory.tag || ''}`;
-    
+    const cacheKey = getCacheKey(selectedCategory);
+
     // 最近播放不缓存，始终实时获取
     if (selectedCategory.type === 'record') {
       set({ loading: true, contentData: [], pageStart: 0, hasMore: true, error: null });
       await get().loadMoreData();
       return;
     }
-    
+
     // 检查缓存
-    if (dataCache.has(cacheKey)) {
-      set({ 
-        loading: false, 
-        contentData: dataCache.get(cacheKey)!, 
-        pageStart: dataCache.get(cacheKey)!.length, 
-        hasMore: false, 
-        error: null 
+    if (dataCache.has(cacheKey) && isValidCache(dataCache.get(cacheKey)!)) {
+      const cachedData = dataCache.get(cacheKey)!;
+      set({
+        loading: false,
+        contentData: cachedData.data,
+        pageStart: cachedData.data.length,
+        hasMore: cachedData.hasMore,
+        error: null
       });
       return;
     }
-    
+
     set({ loading: true, contentData: [], pageStart: 0, hasMore: true, error: null });
     await get().loadMoreData();
   },
@@ -151,34 +172,74 @@ const useHomeStore = create<HomeState>((set, get) => ({
 
         set({ contentData: rowItems, hasMore: false });
       } else if (selectedCategory.type && selectedCategory.tag) {
-        const result = await api.getDoubanData(selectedCategory.type, selectedCategory.tag, 20, pageStart);
-        if (result.list.length === 0) {
-          set({ hasMore: false });
-        } else {
-          const newItems = result.list.map((item) => ({
-            ...item,
-            id: item.title,
-            source: "douban",
-          })) as RowItem[];
-          
-          const cacheKey = `${selectedCategory.title}-${selectedCategory.tag || ''}`;
-          
-          if (pageStart === 0) {
-            // 缓存新数据
-            dataCache.set(cacheKey, newItems);
-            set({
-              contentData: newItems,
-              pageStart: result.list.length,
-              hasMore: true,
-            });
-          } else {
-            // 增量加载时不缓存，直接追加
-            set((state) => ({
-              contentData: [...state.contentData, ...newItems],
-              pageStart: state.pageStart + result.list.length,
-              hasMore: true,
-            }));
+        const result = await api.getDoubanData(
+          selectedCategory.type,
+          selectedCategory.tag,
+          20,
+          pageStart
+        );
+
+        const newItems = result.list.map((item) => ({
+          ...item,
+          id: item.title,
+          source: "douban",
+        })) as RowItem[];
+
+        const cacheKey = getCacheKey(selectedCategory);
+
+        if (pageStart === 0) {
+          // 清理过期缓存
+          for (const [key, value] of dataCache.entries()) {
+            if (!isValidCache(value)) {
+              dataCache.delete(key);
+            }
           }
+
+          // 如果缓存太大，删除最旧的项
+          if (dataCache.size >= MAX_CACHE_SIZE) {
+            const oldestKey = Array.from(dataCache.keys())[0];
+            dataCache.delete(oldestKey);
+          }
+
+          // 限制缓存的数据条目数，但不限制显示的数据
+          const cacheItems = newItems.slice(0, MAX_ITEMS_PER_CACHE);
+
+          // 存储新缓存
+          dataCache.set(cacheKey, {
+            data: cacheItems,
+            timestamp: Date.now(),
+            type: selectedCategory.type,
+            hasMore: true // 始终为 true，因为我们允许继续加载
+          });
+
+          set({
+            contentData: newItems, // 使用完整的新数据
+            pageStart: newItems.length,
+            hasMore: result.list.length !== 0,
+          });
+        } else {
+          // 增量加载时更新缓存
+          const existingCache = dataCache.get(cacheKey);
+          if (existingCache) {
+            // 只有当缓存数据少于最大限制时才更新缓存
+            if (existingCache.data.length < MAX_ITEMS_PER_CACHE) {
+              const updatedData = [...existingCache.data, ...newItems];
+              const limitedCacheData = updatedData.slice(0, MAX_ITEMS_PER_CACHE);
+
+              dataCache.set(cacheKey, {
+                ...existingCache,
+                data: limitedCacheData,
+                hasMore: true // 始终为 true，因为我们允许继续加载
+              });
+            }
+          }
+
+          // 更新状态时使用所有数据
+          set((state) => ({
+            contentData: [...state.contentData, ...newItems],
+            pageStart: state.pageStart + newItems.length,
+            hasMore: result.list.length !== 0,
+          }));
         }
       } else if (selectedCategory.tags) {
         // It's a container category, do not load content, but clear current content
@@ -188,7 +249,7 @@ const useHomeStore = create<HomeState>((set, get) => ({
       }
     } catch (err: any) {
       let errorMessage = "加载失败，请重试";
-      
+
       if (err.message === "API_URL_NOT_SET") {
         errorMessage = "请点击右上角设置按钮，配置您的服务器地址";
       } else if (err.message === "UNAUTHORIZED") {
@@ -204,7 +265,7 @@ const useHomeStore = create<HomeState>((set, get) => ({
       } else if (err.message.includes("403")) {
         errorMessage = "访问被拒绝，请检查权限设置";
       }
-      
+
       set({ error: errorMessage });
     } finally {
       set({ loading: false, loadingMore: false });
@@ -213,27 +274,35 @@ const useHomeStore = create<HomeState>((set, get) => ({
 
   selectCategory: (category: Category) => {
     const currentCategory = get().selectedCategory;
-    const cacheKey = `${category.title}-${category.tag || ''}`;
-    
-    // 只有当分类或标签真正变化时才处理
+    const cacheKey = getCacheKey(category);
+
     if (currentCategory.title !== category.title || currentCategory.tag !== category.tag) {
-      set({ selectedCategory: category, contentData: [], pageStart: 0, hasMore: true, error: null });
-      
-      // 最近播放始终实时获取
+      set({
+        selectedCategory: category,
+        contentData: [],
+        pageStart: 0,
+        hasMore: true,
+        error: null
+      });
+
       if (category.type === 'record') {
         get().fetchInitialData();
         return;
       }
-      
-      // 检查缓存，有则直接使用，无则请求
-      if (dataCache.has(cacheKey)) {
-        set({ 
-          contentData: dataCache.get(cacheKey)!, 
-          pageStart: dataCache.get(cacheKey)!.length, 
-          hasMore: false, 
-          loading: false 
+
+      const cachedData = dataCache.get(cacheKey);
+      if (cachedData && isValidCache(cachedData)) {
+        set({
+          contentData: cachedData.data,
+          pageStart: cachedData.data.length,
+          hasMore: cachedData.hasMore,
+          loading: false
         });
       } else {
+        // 删除过期缓存
+        if (cachedData) {
+          dataCache.delete(cacheKey);
+        }
         get().fetchInitialData();
       }
     }
@@ -273,10 +342,10 @@ const useHomeStore = create<HomeState>((set, get) => ({
       }
       return {};
     });
-    
+
     get().fetchInitialData();
   },
-  
+
   clearError: () => {
     set({ error: null });
   },

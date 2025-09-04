@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, FlatList, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, StyleSheet, FlatList, Alert, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useTVEventHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
@@ -20,6 +20,7 @@ import { getCommonResponsiveStyles } from "@/utils/ResponsiveStyles";
 import ResponsiveNavigation from "@/components/navigation/ResponsiveNavigation";
 import ResponsiveHeader from "@/components/navigation/ResponsiveHeader";
 import { DeviceUtils } from "@/utils/DeviceUtils";
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 export default function SettingsScreen() {
   const { loadSettings, saveSettings, setApiBaseUrl, setM3uUrl } = useSettingsStore();
@@ -50,6 +51,7 @@ export default function SettingsScreen() {
       const realMessage = lastMessage.split("_")[0];
       handleRemoteInput(realMessage);
       clearMessage(); // Clear the message after processing
+      markAsChanged();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastMessage, targetPage]);
@@ -164,13 +166,22 @@ export default function SettingsScreen() {
     [currentFocusIndex, sections.length, deviceType]
   );
 
-  useTVEventHandler(deviceType === "tv" ? handleTVEvent : () => {});
+  useTVEventHandler(deviceType === "tv" ? handleTVEvent : () => { });
 
   // 动态样式
   const dynamicStyles = createResponsiveStyles(deviceType, spacing, insets);
 
   const renderSettingsContent = () => (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    // <KeyboardAvoidingView style={{ flex: 1, backgroundColor }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAwareScrollView
+      enableOnAndroid={true}
+      extraScrollHeight={20}
+      keyboardOpeningTime={0}
+      keyboardShouldPersistTaps="always"
+      scrollEnabled={true}
+      style={{ flex: 1, backgroundColor }}
+    >
+
       <ThemedView style={[commonStyles.container, dynamicStyles.container]}>
         {deviceType === "tv" && (
           <View style={dynamicStyles.header}>
@@ -203,7 +214,8 @@ export default function SettingsScreen() {
           />
         </View>
       </ThemedView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareScrollView>
+    // </KeyboardAvoidingView>
   );
 
   // 根据设备类型决定是否包装在响应式导航中
